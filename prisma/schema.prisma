@@ -1,0 +1,634 @@
+// Prisma Schema para Primeira Troca
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 Int       @id @default(autoincrement())
+  name               String    @db.VarChar(255)
+  email              String    @unique @db.VarChar(255)
+  password           String    @db.VarChar(255)
+  isAdmin            Boolean   @default(false)
+  resetToken         String?   @db.VarChar(255)   // NOVO - Token para recuperação de senha (v1.2)
+  resetTokenExpiry   DateTime?                     // NOVO - Data de expiração do token (v1.2)
+  // 2FA (Autenticação de Dois Fatores) - Módulo 8
+  totpSecret         String?   @db.VarChar(255)   // NOVO - Secret TOTP para 2FA (v2.0)
+  isTwoFactorEnabled Boolean   @default(false)    // NOVO - Se 2FA está habilitado (v2.0)
+  backupCodes        String?   @db.Text           // NOVO - Códigos de backup em JSON (v2.0)
+  // Perfil do Usuário - v2.0
+  birthDate          DateTime?                     // NOVO - Data de aniversário (v2.0)
+  cpf                String?   @db.VarChar(14)    // NOVO - CPF (v2.0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  orders        Order[]
+  reviews       Review[]
+  notifications Notification[]  // NOVO - Notificações do usuário (v1.2)
+  addresses     UserAddress[]  // NOVO - Endereços múltiplos (v2.0)
+  wishlistItems WishlistItem[]  // NOVO - Lista de desejos (v2.0)
+  tickets       Ticket[]  // NOVO - Tickets de suporte criados pelo usuário (v2.0)
+  assignedTickets Ticket[] @relation("AssignedTickets")  // NOVO - Tickets atribuídos ao admin (v2.0)
+  resolvedTickets Ticket[] @relation("ResolvedTickets")  // NOVO - Tickets resolvidos pelo admin (v2.0)
+  auditLogs    AuditLog[]  // NOVO - Logs de auditoria do usuário (v2.0 - Módulo 8)
+  
+  @@map("users")
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String     @unique @db.VarChar(255)
+  slug        String     @unique @db.VarChar(255)
+  description String?    @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  products    Product[]
+  
+  @@map("categories")
+}
+
+model Product {
+  id                Int      @id @default(autoincrement())
+  name              String   @db.VarChar(255)
+  description       String   @db.Text
+  detailedDescription String? @db.Text // NOVO - Descrição detalhada opcional (v2.0)
+  price             Decimal  @db.Decimal(10, 2)
+  originalPrice     Decimal? @db.Decimal(10, 2)
+  image           String   @db.Text  // Mantido para backward compatibility
+  categoryId        Int
+  category          Category @relation(fields: [categoryId], references: [id])
+  sizes             String   @db.Text // JSON array as string
+  colors            String   @db.Text // JSON array as string
+  featured          Boolean  @default(false)
+  stock             Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  images        ProductImage[]  // NOVO - Múltiplas imagens (v1.2)
+  variants      ProductVariant[] // NOVO - Variações do produto (v2.0)
+  orderItems    OrderItem[]
+  reviews       Review[]
+  wishlistItems WishlistItem[]  // NOVO - Itens na wishlist (v2.0)
+  
+  @@map("products")
+}
+
+model Order {
+  id             Int        @id @default(autoincrement())
+  userId         Int
+  user           User       @relation(fields: [userId], references: [id])
+  status         String     @default("pending") @db.VarChar(50) // pending, processing, shipped, delivered, cancelled
+  total          Decimal    @db.Decimal(10, 2)
+  shippingAddress String    @db.Text
+  shippingAddressId Int?   // NOVO - ID do endereço de entrega (v2.0)
+  shippingAddressObj UserAddress? @relation(fields: [shippingAddressId], references: [id], onDelete: SetNull)  // NOVO (v2.0)
+  paymentMethod  String     @db.VarChar(50)
+  couponId      Int?       // NOVO - ID do cupom usado (v1.2)
+  coupon        Coupon?    @relation(fields: [couponId], references: [id])  // NOVO (v1.2)
+  discountAmount Decimal?   @db.Decimal(10, 2)  // NOVO - Valor do desconto aplicado (v1.2)
+  shippingCost  Decimal?   @db.Decimal(10, 2)  // NOVO - Custo do frete (v2.0)
+  shippingMethod String?    @db.VarChar(50)     // NOVO - Método de entrega (v2.0)
+  trackingCode   String?    @db.VarChar(100)     // NOVO - Código de rastreamento (v2.0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  
+  items          OrderItem[]
+  payments       Payment[]  // NOVO - Pagamentos do pedido (v2.0)
+  stockMovements StockMovement[] // NOVO - Movimentações de estoque relacionadas (v2.0)
+  shippingTracking ShippingTracking? // NOVO - Rastreamento de entrega (v2.0)
+  tickets       Ticket[]  // NOVO - Tickets relacionados ao pedido (v2.0)
+  
+  @@index([couponId])  // NOVO (v1.2)
+  @@index([shippingAddressId])  // NOVO (v2.0)
+  @@index([trackingCode])  // NOVO (v2.0)
+  @@map("orders")
+}
+
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  quantity    Int
+  size        String   @db.VarChar(50)
+  color       String   @db.VarChar(50)
+  price       Decimal  @db.Decimal(10, 2) // Price at time of purchase
+  
+  @@map("order_items")
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  rating    Int      // 1-5 stars
+  comment   String?  @db.Text // Opcional - apenas quem comprou pode comentar
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([productId, userId]) // Um usuário pode avaliar um produto apenas uma vez
+  @@map("reviews")
+}
+
+model Settings {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique @db.VarChar(255)
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("settings")
+}
+
+// ============================================
+// NOVOS MODELOS - VERSÃO 1.2
+// ============================================
+
+// Módulo 1: Upload de Múltiplas Imagens
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String   @db.Text                    // URL da imagem (cloud storage ou base64)
+  isPrimary Boolean  @default(false)               // Se é a imagem principal
+  order     Int      @default(0)                  // Ordem de exibição (0, 1, 2, ...)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([productId])
+  @@map("product_images")
+}
+
+// Módulo 2: Cupons e Descontos
+model Coupon {
+  id           Int      @id @default(autoincrement())
+  code         String   @unique @db.VarChar(50)   // Código único do cupom
+  discountType String   @db.VarChar(20)           // 'percentage' ou 'fixed'
+  discountValue Decimal  @db.Decimal(10, 2)        // Valor do desconto
+  minPurchase   Decimal? @db.Decimal(10, 2)        // Compra mínima (opcional)
+  maxDiscount  Decimal? @db.Decimal(10, 2)        // Desconto máximo (opcional, para %)
+  validFrom    DateTime                            // Data de início
+  validUntil   DateTime                            // Data de fim
+  maxUses      Int?                                // Máximo de usos (null = ilimitado)
+  currentUses  Int      @default(0)               // Usos atuais
+  isActive     Boolean  @default(true)             // Se está ativo
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  orders       Order[]
+  
+  @@index([code])
+  @@index([isActive, validFrom, validUntil])
+  @@map("coupons")
+}
+
+// Módulo 3: Notificações em Tempo Real
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   @db.VarChar(50)            // 'order', 'stock', 'system', 'coupon'
+  title     String   @db.VarChar(255)           // Título da notificação
+  message   String   @db.Text                   // Mensagem da notificação
+  data      String?  @db.Text                   // JSON com dados extras
+  isRead    Boolean  @default(false)            // Se foi lida
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+// ============================================
+// NOVOS MODELOS - VERSÃO 2.0
+// ============================================
+
+// Módulo 1: Sistema de Pagamentos
+model Payment {
+  id              Int      @id @default(autoincrement())
+  orderId         Int
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  // Informações do Gateway
+  gateway         String   @db.VarChar(50)            // 'stripe', 'mercadopago', 'pagseguro'
+  gatewayPaymentId String  @db.VarChar(255)           // ID do pagamento no gateway
+  gatewayTransactionId String? @db.VarChar(255)       // ID da transação no gateway
+  
+  // Método de Pagamento
+  paymentMethod   String   @db.VarChar(50)            // 'credit_card', 'pix', 'boleto'
+  installments    Int      @default(1)                // Número de parcelas
+  
+  // Valores
+  amount          Decimal  @db.Decimal(10, 2)          // Valor total
+  fees            Decimal? @db.Decimal(10, 2)          // Taxas do gateway
+  netAmount       Decimal? @db.Decimal(10, 2)          // Valor líquido recebido
+  
+  // Status
+  status          String   @db.VarChar(50)            // 'pending', 'processing', 'approved', 'rejected', 'refunded'
+  statusDetail    String?  @db.Text                    // Detalhes do status
+  
+  // Dados do Cartão (criptografado)
+  cardLastDigits  String?  @db.VarChar(4)             // Últimos 4 dígitos
+  cardBrand       String?  @db.VarChar(50)            // 'visa', 'mastercard', etc.
+  
+  // PIX
+  pixCode         String?  @db.Text                    // Código PIX (QR Code)
+  pixExpiresAt    DateTime?                            // Expiração do PIX
+  
+  // Boleto
+  boletoUrl       String?  @db.Text                    // URL do boleto
+  boletoBarcode   String?  @db.VarChar(255)           // Código de barras
+  boletoExpiresAt DateTime?                            // Vencimento do boleto
+  
+  // Webhook
+  webhookReceived Boolean  @default(false)            // Se webhook foi recebido
+  webhookData     String?  @db.Text                    // Dados do webhook (JSON)
+  
+  // Auditoria
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([orderId])
+  @@index([gatewayPaymentId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+// Módulo 2: Sistema de Estoque Avançado
+model ProductVariant {
+  id        Int     @id @default(autoincrement())
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  // Variação
+  size      String? @db.VarChar(20)                   // 'PP', 'P', 'M', 'G', 'GG', etc.
+  color     String? @db.VarChar(50)                   // 'Azul', 'Vermelho', etc.
+  
+  // Estoque
+  stock     Int     @default(0)                       // Quantidade em estoque
+  reservedStock Int @default(0)                       // Estoque reservado (checkout)
+  minStock  Int     @default(5)                       // Estoque mínimo (alerta)
+  
+  // Preço (opcional - pode variar por tamanho/cor)
+  price     Decimal? @db.Decimal(10, 2)               // Preço específico (null = usa preço do produto)
+  
+  // Status
+  isActive  Boolean @default(true)                    // Se a variação está ativa
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Histórico de movimentações
+  movements StockMovement[]
+  
+  // Wishlist
+  wishlistItems WishlistItem[]  // NOVO - Itens na wishlist que usam esta variação (v2.0)
+  
+  @@unique([productId, size, color])  // Uma variação única por produto/tamanho/cor
+  @@index([productId])
+  @@index([stock])
+  @@map("product_variants")
+}
+
+model StockMovement {
+  id          Int      @id @default(autoincrement())
+  variantId   Int
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  
+  // Tipo de movimentação
+  type        String   @db.VarChar(50)                // 'sale', 'purchase', 'adjustment', 'reserve', 'release', 'return'
+  
+  // Quantidade
+  quantity    Int                                      // Quantidade (positivo = entrada, negativo = saída)
+  
+  // Referência
+  orderId     Int?                                     // ID do pedido (se relacionado a venda)
+  order       Order?   @relation(fields: [orderId], references: [id])
+  
+  // Detalhes
+  reason      String?  @db.Text                        // Motivo da movimentação
+  description String?  @db.Text                        // Descrição adicional
+  
+  // Usuário que realizou (para auditoria)
+  userId      Int?                                     // ID do usuário/admin que realizou
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([variantId])
+  @@index([orderId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+// Módulo 3: Sistema de Frete e Entregas
+model UserAddress {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Endereço
+  label         String?  @db.VarChar(50)                // 'Casa', 'Trabalho', 'Outro', etc.
+  street        String   @db.VarChar(255)               // Rua/Logradouro
+  number        String   @db.VarChar(20)                // Número
+  complement    String?  @db.VarChar(255)               // Complemento
+  neighborhood  String   @db.VarChar(100)               // Bairro
+  city          String   @db.VarChar(100)               // Cidade
+  state         String   @db.VarChar(2)                 // UF (2 letras)
+  zipCode       String   @db.VarChar(10)               // CEP
+  country       String   @default("BR") @db.VarChar(2) // País (padrão: BR)
+  
+  // Informações Adicionais
+  reference     String?  @db.Text                        // Ponto de referência
+  isDefault     Boolean  @default(false)                // Se é o endereço padrão
+  
+  // Dados de Entrega
+  recipientName String?  @db.VarChar(100)                // Nome do destinatário (se diferente do usuário)
+  phone         String?  @db.VarChar(20)                 // Telefone de contato
+  
+  // Relações
+  orders        Order[]  // Pedidos que usam este endereço (v2.0)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([zipCode])
+  @@map("user_addresses")
+}
+
+model ShippingTracking {
+  id            Int      @id @default(autoincrement())
+  orderId       Int      @unique
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  // Transportadora
+  carrier       String   @db.VarChar(50)                // 'correios', 'jadlog', 'total', etc.
+  trackingCode  String   @db.VarChar(255)               // Código de rastreamento
+  
+  // Status Atual
+  status        String   @db.VarChar(50)                // 'pending', 'in_transit', 'out_for_delivery', 'delivered', 'exception'
+  statusDetail  String?  @db.Text                        // Descrição do status
+  
+  // Endereço de Entrega
+  address       String   @db.Text                        // Endereço completo
+  city          String   @db.VarChar(100)
+  state         String   @db.VarChar(2)
+  zipCode       String   @db.VarChar(10)
+  
+  // Datas
+  shippedAt     DateTime?                               // Data de envio
+  estimatedDelivery DateTime?                           // Data estimada de entrega
+  deliveredAt   DateTime?                               // Data real de entrega
+  
+  // Eventos de Rastreamento
+  events        String?  @db.Text                        // JSON com eventos de rastreamento
+  
+  // Confirmação
+  deliveryProof String?  @db.Text                        // Foto/comprovação de entrega
+  recipientName String?  @db.VarChar(100)                // Nome de quem recebeu
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([trackingCode])
+  @@index([status])
+  @@map("shipping_trackings")
+}
+
+// Módulo 4: Sistema de Wishlist/Favoritos
+model WishlistItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  // Variação (opcional)
+  variantId Int?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  
+  // Configurações
+  notes     String?  @db.Text                        // Notas do usuário sobre o item
+  priority  Int      @default(0)                     // Prioridade (0 = normal, maior = mais importante)
+  
+  // Compartilhamento
+  isPublic  Boolean  @default(false)                 // Se o item é público (permite compartilhamento)
+  shareCode String?  @unique @db.VarChar(50)          // Código para compartilhar (gerado automaticamente)
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  
+  @@unique([userId, productId, variantId])
+  @@index([userId])
+  @@index([productId])
+  @@index([shareCode])
+  @@map("wishlist_items")
+}
+
+// Módulo 5: Sistema de Chat/Suporte
+model Ticket {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Informações do Ticket
+  subject       String   @db.VarChar(255)              // Assunto
+  description   String   @db.Text                      // Descrição inicial
+  category      String   @db.VarChar(50)              // 'technical', 'order', 'payment', 'other'
+  
+  // Status
+  status        String   @default("open") @db.VarChar(50) // 'open', 'in_progress', 'waiting_customer', 'resolved', 'closed'
+  priority      String   @default("medium") @db.VarChar(50) // 'low', 'medium', 'high', 'urgent'
+  
+  // Atribuição
+  assignedToId  Int?                                    // Admin responsável
+  assignedTo    User?    @relation("AssignedTickets", fields: [assignedToId], references: [id], onDelete: SetNull)
+  
+  // Pedido Relacionado (se aplicável)
+  orderId       Int?
+  order         Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  
+  // Resolução
+  resolution    String?  @db.Text                        // Solução/resposta final
+  resolvedAt    DateTime?                                // Data de resolução
+  resolvedById  Int?                                     // Admin que resolveu
+  resolvedBy    User?    @relation("ResolvedTickets", fields: [resolvedById], references: [id], onDelete: SetNull)
+  
+  // Métricas
+  firstResponseAt DateTime?                              // Data da primeira resposta
+  averageResponseTime Int?                                // Tempo médio de resposta (minutos)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relações
+  messages      ChatMessage[]
+  
+  @@index([userId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+model ChatMessage {
+  id          Int      @id @default(autoincrement())
+  ticketId    Int
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  // Remetente
+  senderId    Int                                     // ID do usuário (cliente ou admin)
+  senderIsAdmin Boolean @default(false)               // Se o remetente é admin
+  
+  // Mensagem
+  content     String   @db.Text                        // Conteúdo da mensagem
+  messageType String   @default("text") @db.VarChar(50) // 'text', 'file', 'image', 'system'
+  
+  // Arquivo (se aplicável)
+  fileUrl     String?  @db.Text                        // URL do arquivo enviado
+  fileName    String?  @db.VarChar(255)                // Nome do arquivo
+  fileSize    Int?                                     // Tamanho do arquivo (bytes)
+  
+  // Status
+  isRead      Boolean  @default(false)                 // Se foi lida
+  readAt      DateTime?                                // Data de leitura
+  
+  createdAt   DateTime  @default(now())
+  
+  @@index([ticketId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+model FAQ {
+  id          Int      @id @default(autoincrement())
+  question    String   @db.VarChar(500)                // Pergunta
+  answer      String   @db.Text                        // Resposta
+  category    String   @db.VarChar(50)                // 'general', 'orders', 'payments', 'shipping', 'products', 'returns'
+  order       Int      @default(0)                     // Ordem de exibição
+  isActive    Boolean  @default(true)                  // Se está ativo
+  helpfulCount Int     @default(0)                      // Contador de "útil"
+  notHelpfulCount Int  @default(0)                     // Contador de "não útil"
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([category])
+  @@index([isActive])
+  @@map("faqs")
+}
+
+// ============================================
+// NOVOS MODELOS - VERSÃO 2.0 - MÓDULO 8
+// ============================================
+
+// Módulo 8: Sistema de Segurança Avançada
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?                                    // ID do usuário que realizou a ação (null se não autenticado)
+  userEmail   String?  @db.VarChar(255)               // Email do usuário (para auditoria mesmo se usuário for deletado)
+  action      String   @db.VarChar(100)               // Tipo de ação: 'create', 'update', 'delete', 'login', 'logout', etc.
+  resourceType String  @db.VarChar(50)                // Tipo de recurso: 'user', 'product', 'order', 'payment', etc.
+  resourceId  Int?                                    // ID do recurso afetado
+  details     String?  @db.Text                       // Detalhes adicionais em JSON
+  ipAddress   String?  @db.VarChar(45)                // IP do usuário
+  userAgent   String?  @db.Text                       // User Agent do navegador
+  createdAt   DateTime @default(now())
+  
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Modelo para slides do carrossel principal (Hero)
+model HeroSlide {
+  id            Int      @id @default(autoincrement())
+  title         String?  @db.VarChar(255)
+  subtitle      String?  @db.VarChar(255)
+  description   String?  @db.Text
+  price         String?  @db.VarChar(50)
+  originalPrice String?  @db.VarChar(50)
+  buttonText    String   @db.VarChar(100)
+  buttonLink    String   @db.VarChar(255)
+  mediaUrl      String?  @db.Text // URL para imagem, vídeo ou GIF
+  mediaType     String?  @db.VarChar(20) // 'image', 'video', 'gif'
+  order         Int      @default(0) // Ordem de exibição
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([order])
+  @@index([isActive])
+  @@map("hero_slides")
+}
+
+// Modelo para cards de benefícios (RulesBar)
+model BenefitCard {
+  id          Int      @id @default(autoincrement())
+  iconName    String   @db.VarChar(100) // Nome do ícone (ex: 'Send', 'RefreshCw', 'CreditCard')
+  mainText    String   @db.VarChar(255)
+  subText     String   @db.VarChar(255)
+  color       String?  @db.VarChar(7) // Cor do card em formato hex (#FF6B35)
+  order       Int      @default(0) // Ordem de exibição
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([order])
+  @@index([isActive])
+  @@map("benefit_cards")
+}
+
+// Modelo para menus da navbar
+model Menu {
+  id          Int      @id @default(autoincrement())
+  label       String   @db.VarChar(255) // Texto do menu (ex: "BEBÊS", "MENINAS")
+  href        String?  @db.VarChar(255) // Link direto (se não tiver submenu)
+  order       Int      @default(0) // Ordem de exibição
+  isActive    Boolean  @default(true) // Se está ativo
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Submenus
+  items       MenuItem[] // Itens do submenu
+  
+  @@index([order])
+  @@index([isActive])
+  @@map("menus")
+}
+
+// Modelo para itens de submenu
+model MenuItem {
+  id          Int      @id @default(autoincrement())
+  menuId      Int
+  menu        Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  label       String   @db.VarChar(255) // Texto do item (ex: "Conjuntos", "Vestidos")
+  href        String   @db.VarChar(255) // Link do item
+  order       Int      @default(0) // Ordem de exibição
+  isActive    Boolean  @default(true) // Se está ativo
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([menuId])
+  @@index([order])
+  @@index([isActive])
+  @@map("menu_items")
+}
+
