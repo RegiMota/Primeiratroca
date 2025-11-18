@@ -14,7 +14,7 @@ echo "✅ Código atualizado!"
 echo ""
 
 # Dar permissão de execução aos scripts
-chmod +x iniciar-todos.sh verificar-status.sh recriar-banco.sh
+chmod +x iniciar-todos.sh verificar-status.sh recriar-banco.sh criar-env-prod.sh
 
 echo "🚀 Iniciando todos os containers..."
 echo ""
