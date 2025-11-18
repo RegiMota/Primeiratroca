@@ -34,17 +34,19 @@ docker volume rm primeiratroca_postgres_data 2>/dev/null || echo "Volume não ex
 echo ""
 echo "🔄 Recriando containers com a senha correta..."
 export $(cat .env.prod | grep -v '^#' | xargs)
-docker-compose -f docker-compose.prod.yml up -d postgres
+docker-compose -f docker-compose.prod.yml up -d
 
 echo ""
-echo "⏳ Aguardando PostgreSQL iniciar..."
-sleep 10
+echo "⏳ Aguardando containers iniciarem..."
+sleep 15
 
 echo ""
-echo "✅ Banco de dados recriado!"
+echo "✅ Banco de dados recriado e containers iniciados!"
 echo ""
 echo "📋 Próximos passos:"
 echo "   1. Execute as migrações: docker-compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy"
 echo "   2. Crie o usuário admin: docker-compose -f docker-compose.prod.yml exec backend node scripts/create-admin.js"
-echo "   3. Reinicie o backend: ./restart-backend.sh"
+echo ""
+echo "📋 Verificar status:"
+echo "   ./verificar-status.sh"
 
