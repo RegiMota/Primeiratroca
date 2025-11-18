@@ -23,9 +23,31 @@ generate_password() {
     openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
 }
 
+# Detectar gerenciador de pacotes
+if command -v yum &> /dev/null; then
+    PKG_MANAGER="yum"
+    PKG_INSTALL="yum install -y"
+    PKG_UPDATE="yum update -y"
+elif command -v dnf &> /dev/null; then
+    PKG_MANAGER="dnf"
+    PKG_INSTALL="dnf install -y"
+    PKG_UPDATE="dnf update -y"
+elif command -v apt &> /dev/null; then
+    PKG_MANAGER="apt"
+    PKG_INSTALL="apt install -y"
+    PKG_UPDATE="apt update && apt upgrade -y"
+else
+    echo "❌ Gerenciador de pacotes não suportado!"
+    exit 1
+fi
+
 # Passo 1: Atualizar sistema
 echo -e "${YELLOW}📦 Passo 1: Atualizando sistema...${NC}"
-apt update && apt upgrade -y
+if [ "$PKG_MANAGER" = "apt" ]; then
+    apt update && apt upgrade -y
+else
+    $PKG_UPDATE
+fi
 
 # Passo 2: Instalar Docker
 echo -e "${YELLOW}🐳 Passo 2: Instalando Docker...${NC}"
@@ -49,7 +71,12 @@ fi
 
 # Passo 4: Instalar Nginx e Certbot
 echo -e "${YELLOW}🌐 Passo 4: Instalando Nginx e Certbot...${NC}"
-apt install -y nginx certbot python3-certbot-nginx
+if [ "$PKG_MANAGER" = "yum" ] || [ "$PKG_MANAGER" = "dnf" ]; then
+    $PKG_INSTALL epel-release
+    $PKG_INSTALL nginx certbot python3-certbot-nginx
+else
+    $PKG_INSTALL nginx certbot python3-certbot-nginx
+fi
 
 # Passo 5: Criar diretório do projeto
 echo -e "${YELLOW}📁 Passo 5: Preparando diretório do projeto...${NC}"
