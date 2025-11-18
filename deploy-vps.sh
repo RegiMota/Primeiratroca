@@ -254,8 +254,12 @@ fi
 # Testar configuração
 nginx -t
 
-# Recarregar Nginx
-systemctl reload nginx
+# Iniciar e habilitar Nginx
+systemctl start nginx || true
+systemctl enable nginx || true
+
+# Recarregar Nginx (ou iniciar se não estiver rodando)
+systemctl reload nginx 2>/dev/null || systemctl start nginx
 
 # Passo 10: Configurar Firewall
 echo -e "${YELLOW}🔥 Passo 10: Configurando firewall...${NC}"
