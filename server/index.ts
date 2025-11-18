@@ -56,27 +56,36 @@ app.use(cors({
     }
     
     // Em produção, usar apenas origens permitidas
-    const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || [
-      'http://localhost:3000', // Site principal
-      'http://localhost:3001', // Admin panel (v2.0)
-      'http://localhost:3002', // Site principal (porta alternativa)
-    ];
+    const corsOriginEnv = process.env.CORS_ORIGIN;
+    const allowedOrigins = corsOriginEnv 
+      ? corsOriginEnv.split(',').map(o => o.trim()).filter(o => o.length > 0)
+      : [
+          'http://localhost:3000', // Site principal
+          'http://localhost:3001', // Admin panel (v2.0)
+          'http://localhost:3002', // Site principal (porta alternativa)
+        ];
+    
+    // Log para debug (sempre em produção para diagnosticar)
+    console.log('🔍 CORS Debug:');
+    console.log('  Origem recebida:', origin || '(sem origem)');
+    console.log('  CORS_ORIGIN env:', corsOriginEnv || '(não definido)');
+    console.log('  Origens permitidas:', allowedOrigins);
     
     // Se não tiver origem (requisições do mesmo domínio ou curl), permitir
     if (!origin) {
+      console.log('  ✅ Permitindo (sem origem)');
       return callback(null, true);
     }
     
     // Verificar se a origem está na lista permitida
     if (allowedOrigins.includes(origin)) {
+      console.log('  ✅ Origem permitida');
       return callback(null, true);
     }
     
-    // Log para debug (apenas em desenvolvimento)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('CORS bloqueado para origem:', origin);
-      console.log('Origens permitidas:', allowedOrigins);
-    }
+    // Log de erro
+    console.log('  ❌ CORS bloqueado para origem:', origin);
+    console.log('  Origens permitidas:', allowedOrigins);
     
     callback(new Error('Not allowed by CORS'));
   },
