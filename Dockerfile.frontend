@@ -19,6 +19,9 @@ COPY components.json ./
 COPY tailwind.config.* ./
 
 # Build da aplicação
+# ARG permite passar variáveis durante o build
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # Estágio de produção com nginx

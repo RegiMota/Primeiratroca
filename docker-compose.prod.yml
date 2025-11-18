@@ -54,9 +54,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://api.seudominio.com.br}
     container_name: primeira-troca-frontend-prod
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-https://api.seudominio.com.br}
     ports:
       - "8080:80"
     restart: unless-stopped
@@ -70,9 +70,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.admin
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://api.seudominio.com.br}
     container_name: primeira-troca-admin-prod
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-https://api.seudominio.com.br}
     ports:
       - "8081:80"
     restart: unless-stopped

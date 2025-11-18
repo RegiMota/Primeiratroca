@@ -7,7 +7,11 @@ import axios from 'axios';
 export const getServerUrl = (port: string = '5000', path: string = '') => {
   // Se houver variável de ambiente, usar ela
   if (import.meta.env.VITE_API_URL) {
-    const baseUrl = import.meta.env.VITE_API_URL.replace('/api', '');
+    let baseUrl = import.meta.env.VITE_API_URL;
+    // Remover /api do final se existir
+    baseUrl = baseUrl.replace(/\/api\/?$/, '');
+    // Garantir que não termine com /
+    baseUrl = baseUrl.replace(/\/$/, '');
     return `${baseUrl}${path}`;
   }
   
@@ -25,6 +29,16 @@ export const getServerUrl = (port: string = '5000', path: string = '') => {
 
 // Detectar automaticamente a URL da API baseado no hostname atual
 const getAPIUrl = () => {
+  // Se houver variável de ambiente, usar ela diretamente
+  if (import.meta.env.VITE_API_URL) {
+    let apiUrl = import.meta.env.VITE_API_URL;
+    // Garantir que termine com /api
+    if (!apiUrl.endsWith('/api')) {
+      apiUrl = apiUrl.replace(/\/$/, '') + '/api';
+    }
+    return apiUrl;
+  }
+  
   return getServerUrl('5000', '/api');
 };
 
