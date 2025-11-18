@@ -1,4 +1,4 @@
-import { ShoppingCart, Star, Heart } from 'lucide-react';
+import { ShoppingCart, Star, Heart, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '../lib/mockData';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -20,6 +20,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const [, setLocation] = useLocation();
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   const discount = product.originalPrice
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
@@ -94,7 +95,11 @@ export function ProductCard({ product }: ProductCardProps) {
         <ImageWithFallback
           src={product.image}
           alt={product.name}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsImageModalOpen(true);
+          }}
         />
         
         {/* Overlay gradient no hover */}
@@ -204,6 +209,78 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
       </div>
+
+      {/* Modal para exibir imagem em tamanho real */}
+      {isImageModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-black bg-opacity-90"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '2rem',
+            overflow: 'auto',
+          }}
+          onClick={() => setIsImageModalOpen(false)}
+        >
+          {/* Botão fechar */}
+          <button
+            onClick={() => setIsImageModalOpen(false)}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-50 rounded-full p-2"
+            aria-label="Fechar"
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          {/* Imagem */}
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              height: '100%',
+              minHeight: '100vh',
+              padding: '4rem 2rem',
+              boxSizing: 'border-box',
+            }}
+          >
+            <img
+              src={product.image}
+              alt={product.name}
+              className="rounded-lg"
+              style={{
+                maxWidth: 'calc(100vw - 4rem)',
+                maxHeight: 'calc(100vh - 8rem)',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain',
+                imageRendering: 'auto',
+                display: 'block',
+                margin: 'auto',
+              }}
+              onError={(e) => {
+                console.error('❌ Erro ao carregar imagem no modal:', product.image);
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement;
+                console.log('✅ Imagem carregada no modal:', {
+                  naturalWidth: img.naturalWidth,
+                  naturalHeight: img.naturalHeight,
+                  displayWidth: img.offsetWidth,
+                  displayHeight: img.offsetHeight,
+                  containerWidth: img.parentElement?.offsetWidth,
+                  containerHeight: img.parentElement?.offsetHeight,
+                });
+                img.style.display = 'block';
+              }}
+              loading="eager"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

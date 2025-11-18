@@ -2697,18 +2697,21 @@ router.get('/benefit-cards', async (req: AdminRequest, res) => {
 // POST /api/admin/benefit-cards - Cria um novo card
 router.post('/benefit-cards', async (req: AdminRequest, res) => {
   try {
-    const { iconName, mainText, subText, color, order, isActive } = req.body;
+    const { iconName, imageUrl, mainText, subText, color, link, order, isActive } = req.body;
 
-    if (!iconName || !mainText || !subText) {
-      return res.status(400).json({ error: 'Nome do ícone, texto principal e texto secundário são obrigatórios' });
+    // Validar que tem ícone OU imagem
+    if ((!iconName && !imageUrl) || !mainText || !subText) {
+      return res.status(400).json({ error: 'Ícone ou imagem, texto principal e texto secundário são obrigatórios' });
     }
 
     const card = await prisma.benefitCard.create({
       data: {
-        iconName,
+        iconName: iconName || null,
+        imageUrl: imageUrl || null,
         mainText,
         subText,
         color: color || null,
+        link: link || null,
         order: order || 0,
         isActive: isActive !== undefined ? isActive : true,
       },
@@ -2738,18 +2741,43 @@ router.post('/benefit-cards', async (req: AdminRequest, res) => {
 router.put('/benefit-cards/:id', async (req: AdminRequest, res) => {
   try {
     const cardId = parseInt(req.params.id);
-    const { iconName, mainText, subText, color, order, isActive } = req.body;
+    const { iconName, imageUrl, mainText, subText, color, link, order, isActive } = req.body;
+
+    // Verificar se o card existe
+    const existingCard = await prisma.benefitCard.findUnique({
+      where: { id: cardId },
+    });
+
+    if (!existingCard) {
+      return res.status(404).json({ error: 'Card não encontrado' });
+    }
+
+    // Validar que tem ícone OU imagem (se ambos estiverem sendo atualizados)
+    const finalIconName = iconName !== undefined ? (iconName || null) : existingCard.iconName;
+    const finalImageUrl = imageUrl !== undefined ? (imageUrl || null) : (existingCard as any).imageUrl || null;
+    
+    if (!finalIconName && !finalImageUrl) {
+      return res.status(400).json({ error: 'Ícone ou imagem é obrigatório' });
+    }
+
+    const updateData: any = {};
+    if (iconName !== undefined) updateData.iconName = iconName || null;
+    if (mainText !== undefined) updateData.mainText = mainText;
+    if (subText !== undefined) updateData.subText = subText;
+    if (color !== undefined) updateData.color = color || null;
+    if (link !== undefined) updateData.link = link || null;
+    if (order !== undefined) updateData.order = order;
+    if (isActive !== undefined) updateData.isActive = isActive;
+    
+    // Tentar adicionar imageUrl apenas se estiver presente na requisição
+    // O Prisma vai ignorar se o campo não existir no schema
+    if (imageUrl !== undefined) {
+      updateData.imageUrl = imageUrl || null;
+    }
 
     const card = await prisma.benefitCard.update({
       where: { id: cardId },
-      data: {
-        iconName,
-        mainText,
-        subText,
-        color: color !== undefined ? (color || null) : undefined,
-        order,
-        isActive,
-      },
+      data: updateData,
     });
 
     // Audit logging assíncrono (não bloqueia a resposta)
@@ -2768,10 +2796,56 @@ router.put('/benefit-cards/:id', async (req: AdminRequest, res) => {
     res.json(card);
   } catch (error: any) {
     console.error('Error updating benefit card:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message,
+      meta: error.meta,
+    });
+    
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Card não encontrado' });
     }
-    res.status(500).json({ error: 'Erro ao atualizar card de benefício' });
+    
+    // Erro específico para campo desconhecido ou schema desatualizado
+    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('imageUrl')) {
+      // Tentar atualizar sem o campo imageUrl (caso o campo ainda não exista no banco)
+      try {
+        const updateDataWithoutImage: any = {};
+        if (iconName !== undefined) updateDataWithoutImage.iconName = iconName || null;
+        if (mainText !== undefined) updateDataWithoutImage.mainText = mainText;
+        if (subText !== undefined) updateDataWithoutImage.subText = subText;
+        if (color !== undefined) updateDataWithoutImage.color = color || null;
+        if (order !== undefined) updateDataWithoutImage.order = order;
+        if (isActive !== undefined) updateDataWithoutImage.isActive = isActive;
+
+        const card = await prisma.benefitCard.update({
+          where: { id: cardId },
+          data: updateDataWithoutImage,
+        });
+
+        console.warn('Card atualizado sem imageUrl (campo pode não existir no banco ainda)');
+        return res.json(card);
+      } catch (retryError: any) {
+        console.error('Error on retry without imageUrl:', retryError);
+      }
+    }
+    
+    // Log completo do erro para debug
+    const errorMessage = error.message || 'Erro desconhecido';
+    const errorCode = error.code || 'UNKNOWN';
+    
+    console.error('Full error object:', JSON.stringify(error, null, 2));
+    
+    res.status(500).json({ 
+      error: 'Erro ao atualizar card de benefício',
+      details: process.env.NODE_ENV === 'development' ? {
+        message: errorMessage,
+        code: errorCode,
+        hint: errorCode === 'P2009' || errorMessage?.includes('imageUrl') 
+          ? 'O campo imageUrl pode não existir no banco de dados. Execute: ALTER TABLE benefit_cards ADD COLUMN imageUrl TEXT NULL;'
+          : undefined
+      } : undefined
+    });
   }
 });
 

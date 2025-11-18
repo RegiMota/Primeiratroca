@@ -190,7 +190,7 @@ router.post('/', authenticate, checkoutRateLimiter, async (req: AuthRequest, res
           reservation.variantId,
           reservation.quantity,
           order.id,
-          15 // Timeout de 15 minutos
+          60 // Timeout de 1 hora (60 minutos)
         );
       }
     } catch (error: any) {
@@ -331,6 +331,11 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
             product: true,
           },
         },
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -342,6 +347,7 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
       ...order,
       total: Number(order.total),
       discountAmount: order.discountAmount ? Number(order.discountAmount) : undefined,
+      shippingCost: order.shippingCost ? Number(order.shippingCost) : undefined,
       coupon: order.coupon ? {
         ...order.coupon,
         discountValue: Number(order.coupon.discountValue),
@@ -356,6 +362,12 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
           price: Number(item.product.price),
           originalPrice: item.product.originalPrice ? Number(item.product.originalPrice) : undefined,
         },
+      })),
+      payments: order.payments.map((payment) => ({
+        ...payment,
+        amount: Number(payment.amount),
+        fees: payment.fees ? Number(payment.fees) : undefined,
+        netAmount: payment.netAmount ? Number(payment.netAmount) : undefined,
       })),
     }));
 

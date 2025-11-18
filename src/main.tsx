@@ -1,11 +1,16 @@
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./index.css";
 
-  import { createRoot } from "react-dom/client";
-  import App from "./App.tsx";
-  import "./index.css";
-  import { initGoogleAnalytics } from "./lib/analytics";
+// Desregistrar service workers antigos que podem causar erros
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister().catch((error) => {
+        console.warn('Erro ao desregistrar service worker:', error);
+      });
+    }
+  });
+}
 
-  // Inicializar Google Analytics
-  initGoogleAnalytics();
-
-  createRoot(document.getElementById("root")!).render(<App />);
-  
+createRoot(document.getElementById("root")!).render(<App />);

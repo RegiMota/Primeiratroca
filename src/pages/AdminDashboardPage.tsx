@@ -21,17 +21,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-
-interface DashboardStats {
-  stats: {
-    totalUsers: number;
-    totalProducts: number;
-    totalOrders: number;
-    totalRevenue: number;
-  };
-  recentOrders: any[];
-  topProducts: any[];
-}
+import { DashboardStats, DashboardOrder, DashboardProduct } from '../types';
 
 const COLORS = ['#0EA5E9', '#F59E0B', '#8B5CF6', '#EC4899', '#10B981'];
 
@@ -89,16 +79,16 @@ export function AdminDashboardPage() {
     receita: Number(order.total),
   }));
 
-  const productsData = dashboardData.topProducts.map((product: any) => ({
+  const productsData = dashboardData.topProducts.map((product: DashboardProduct) => ({
     name: product.name?.substring(0, 20) || 'Produto',
     vendas: product.totalSold || 0,
   }));
 
   const statusData = [
-    { name: 'Pendente', value: dashboardData.recentOrders.filter((o: any) => o.status === 'pending').length },
-    { name: 'Processando', value: dashboardData.recentOrders.filter((o: any) => o.status === 'processing').length },
-    { name: 'Enviado', value: dashboardData.recentOrders.filter((o: any) => o.status === 'shipped').length },
-    { name: 'Entregue', value: dashboardData.recentOrders.filter((o: any) => o.status === 'delivered').length },
+    { name: 'Pendente', value: dashboardData.recentOrders.filter((o: DashboardOrder) => o.status === 'pending').length },
+    { name: 'Processando', value: dashboardData.recentOrders.filter((o: DashboardOrder) => o.status === 'processing').length },
+    { name: 'Enviado', value: dashboardData.recentOrders.filter((o: DashboardOrder) => o.status === 'shipped').length },
+    { name: 'Entregue', value: dashboardData.recentOrders.filter((o: DashboardOrder) => o.status === 'delivered').length },
   ];
 
   return (
@@ -260,7 +250,7 @@ export function AdminDashboardPage() {
             {dashboardData.recentOrders.length === 0 ? (
               <p className="text-center text-gray-600 py-8">Nenhum pedido encontrado</p>
             ) : (
-              dashboardData.recentOrders.map((order: any) => (
+              dashboardData.recentOrders.map((order: DashboardOrder & { user?: { name?: string; email?: string }; items?: unknown[] }) => (
                 <div
                   key={order.id}
                   className="flex items-center justify-between rounded-lg border p-4 hover:bg-gray-50"
@@ -329,7 +319,7 @@ export function AdminDashboardPage() {
             {dashboardData.topProducts.length === 0 ? (
               <p className="text-center text-gray-600 py-8">Nenhum produto vendido ainda</p>
             ) : (
-              dashboardData.topProducts.map((product: any, index: number) => (
+              dashboardData.topProducts.map((product: DashboardProduct & { price?: number }, index: number) => (
                 <div
                   key={product.id || index}
                   className="flex items-center justify-between rounded-lg border p-4 hover:bg-gray-50"

@@ -17,7 +17,7 @@ export class NotificationService {
    */
   static async createNotification(
     userId: number,
-    type: 'order' | 'stock' | 'system' | 'coupon' | 'promotion',
+    type: 'order' | 'stock' | 'system' | 'coupon' | 'promotion' | 'payment',
     title: string,
     message: string,
     data?: NotificationData

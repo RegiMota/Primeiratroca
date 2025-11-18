@@ -14,8 +14,11 @@ export function RegisterPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
+    cpf: '',
     email: '',
+    birthDate: '',
     password: '',
     confirmPassword: '',
   });
@@ -38,8 +41,11 @@ export function RegisterPage() {
 
     // Validate form
     const validationErrors = validateForm(formData, {
-      name: [validators.required, (v) => validators.minLength(v, 3, 'Nome')],
+      firstName: [validators.required, (v) => validators.minLength(v, 2, 'Nome')],
+      lastName: [validators.required, (v) => validators.minLength(v, 2, 'Sobrenome')],
+      cpf: [validators.cpf],
       email: [validators.email],
+      birthDate: [validators.birthDate],
       password: [validators.password],
       confirmPassword: [
         validators.required,
@@ -59,7 +65,16 @@ export function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await register(formData.name, formData.email, formData.password);
+      // Combinar nome e sobrenome
+      const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
+      
+      await register(
+        fullName,
+        formData.email,
+        formData.password,
+        formData.cpf.replace(/\D/g, ''), // Remove formatação do CPF
+        formData.birthDate
+      );
       toast.success('Conta criada!', {
         description: 'Bem-vindo à Primeira Troca. Comece a comprar agora!',
       });
@@ -87,19 +102,72 @@ export function RegisterPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="firstName">Nome</Label>
+              <Input
+                id="firstName"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleInputChange}
+                required
+                className={`mt-2 ${errors.firstName ? 'border-red-500' : ''}`}
+                placeholder="João"
+              />
+              {errors.firstName && (
+                <p className="mt-1 text-sm text-red-500">{errors.firstName}</p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="lastName">Sobrenome</Label>
+              <Input
+                id="lastName"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleInputChange}
+                required
+                className={`mt-2 ${errors.lastName ? 'border-red-500' : ''}`}
+                placeholder="Silva"
+              />
+              {errors.lastName && (
+                <p className="mt-1 text-sm text-red-500">{errors.lastName}</p>
+              )}
+            </div>
+          </div>
+
           <div>
-            <Label htmlFor="name">Nome Completo</Label>
+            <Label htmlFor="cpf">CPF</Label>
             <Input
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
+              id="cpf"
+              name="cpf"
+              value={formData.cpf}
+              onChange={(e) => {
+                // Formatar CPF automaticamente
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length <= 11) {
+                  if (value.length > 3) {
+                    value = value.replace(/^(\d{3})(\d)/, '$1.$2');
+                  }
+                  if (value.length > 6) {
+                    value = value.replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3');
+                  }
+                  if (value.length > 9) {
+                    value = value.replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
+                  }
+                  setFormData({ ...formData, cpf: value });
+                  if (errors.cpf) {
+                    setErrors({ ...errors, cpf: '' });
+                  }
+                }
+              }}
               required
-              className={`mt-2 ${errors.name ? 'border-red-500' : ''}`}
-              placeholder="João Silva"
+              className={`mt-2 ${errors.cpf ? 'border-red-500' : ''}`}
+              placeholder="000.000.000-00"
+              maxLength={14}
             />
-            {errors.name && (
-              <p className="mt-1 text-sm text-red-500">{errors.name}</p>
+            {errors.cpf && (
+              <p className="mt-1 text-sm text-red-500">{errors.cpf}</p>
             )}
           </div>
 
@@ -117,6 +185,23 @@ export function RegisterPage() {
             />
             {errors.email && (
               <p className="mt-1 text-sm text-red-500">{errors.email}</p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="birthDate">Data de Aniversário</Label>
+            <Input
+              id="birthDate"
+              name="birthDate"
+              type="date"
+              value={formData.birthDate}
+              onChange={handleInputChange}
+              required
+              className={`mt-2 ${errors.birthDate ? 'border-red-500' : ''}`}
+              max={new Date().toISOString().split('T')[0]}
+            />
+            {errors.birthDate && (
+              <p className="mt-1 text-sm text-red-500">{errors.birthDate}</p>
             )}
           </div>
 

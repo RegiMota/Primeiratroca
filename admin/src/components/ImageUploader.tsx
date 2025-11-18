@@ -58,9 +58,16 @@ export function ImageUploader({ onUpload, maxSizeMB = 2, maxWidth = 800, maxHeig
 
             let base64String: string;
             if (file.type === 'image/png' || file.type === 'image/jpeg' || file.type === 'image/jpg') {
-              base64String = canvas.toDataURL('image/jpeg', 0.85); // Compressão para JPEG
+              // Para imagens pequenas (80x80), usar qualidade menor para reduzir tamanho
+              const quality = width <= 100 && height <= 100 ? 0.7 : 0.85;
+              base64String = canvas.toDataURL('image/jpeg', quality); // Compressão para JPEG
+            } else if (file.type === 'image/svg+xml') {
+              // Para SVG, usar o original
+              base64String = reader.result as string;
             } else {
-              base64String = reader.result as string; // Para SVG e outros, usar o original
+              // Para outros formatos, converter para JPEG com compressão
+              const quality = width <= 100 && height <= 100 ? 0.7 : 0.85;
+              base64String = canvas.toDataURL('image/jpeg', quality);
             }
 
             resolve(base64String);

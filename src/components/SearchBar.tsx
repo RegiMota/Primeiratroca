@@ -6,6 +6,7 @@ import { useLocation } from 'wouter';
 
 interface SearchBarProps {
   onSearch: (query: string) => void;
+  inputRef?: React.RefObject<HTMLInputElement>;
 }
 
 interface SearchSuggestion {
@@ -14,7 +15,7 @@ interface SearchSuggestion {
   category: string;
 }
 
-export function SearchBar({ onSearch }: SearchBarProps) {
+export function SearchBar({ onSearch, inputRef }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -106,6 +107,7 @@ export function SearchBar({ onSearch }: SearchBarProps) {
       <form onSubmit={handleSubmit} className="relative">
         <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
         <Input
+          ref={inputRef}
           type="search"
           placeholder="Buscar produtos..."
           value={query}
@@ -119,7 +121,7 @@ export function SearchBar({ onSearch }: SearchBarProps) {
               setShowSuggestions(true);
             }
           }}
-          className="w-full rounded-full border-2 border-gray-200 py-2 pl-10 pr-10 focus:border-sky-500"
+          className="w-full rounded-full border-2 border-gray-200 py-2 pl-10 pr-10 focus:border-emerald-500 focus:ring-emerald-500"
         />
         {query && (
           <button

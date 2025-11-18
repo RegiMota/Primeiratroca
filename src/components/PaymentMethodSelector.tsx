@@ -5,13 +5,39 @@ import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 
-export type PaymentMethod = 'credit_card' | 'pix' | 'boleto';
+export type PaymentMethod = 'credit_card' | 'debit_card' | 'pix';
 
 interface PaymentMethodSelectorProps {
   selectedMethod: PaymentMethod | null;
   onMethodChange: (method: PaymentMethod) => void;
-  installments?: number;
-  onInstallmentsChange?: (installments: number) => void;
+  installments?: number | null;
+  onInstallmentsChange?: (installments: number | null) => void;
+  totalAmount?: number; // Valor total para calcular parcelas
+}
+
+/**
+ * Calcula o valor da parcela usando a Tabela Price
+ * @param principal Valor principal (valor total)
+ * @param installments Número de parcelas
+ * @param monthlyRate Taxa de juros mensal (ex: 0.0299 para 2.99%)
+ * @returns Valor da parcela
+ */
+function calculateInstallmentValue(
+  principal: number,
+  installments: number,
+  monthlyRate: number = 0.0299 // 2.99% ao mês (taxa comum no Brasil)
+): number {
+  if (installments <= 0) return principal;
+  if (installments === 1) return principal; // Sem juros na primeira parcela
+  
+  // Fórmula da Tabela Price: P = PV * (i * (1 + i)^n) / ((1 + i)^n - 1)
+  const i = monthlyRate;
+  const n = installments;
+  const numerator = i * Math.pow(1 + i, n);
+  const denominator = Math.pow(1 + i, n) - 1;
+  const installmentValue = principal * (numerator / denominator);
+  
+  return installmentValue;
 }
 
 const paymentMethods = [
@@ -19,7 +45,14 @@ const paymentMethods = [
     value: 'credit_card' as PaymentMethod,
     label: 'Cartão de Crédito',
     icon: CreditCard,
-    description: 'Pague com cartão de crédito',
+    description: 'Pague com cartão de crédito em até 12x',
+    available: true,
+  },
+  {
+    value: 'debit_card' as PaymentMethod,
+    label: 'Cartão de Débito',
+    icon: Wallet,
+    description: 'Pague com cartão de débito',
     available: true,
   },
   {
@@ -29,13 +62,6 @@ const paymentMethods = [
     description: 'Pagamento instantâneo via PIX',
     available: true,
   },
-  {
-    value: 'boleto' as PaymentMethod,
-    label: 'Boleto Bancário',
-    icon: FileText,
-    description: 'Pague com boleto bancário',
-    available: true,
-  },
 ];
 
 export function PaymentMethodSelector({
@@ -43,6 +69,7 @@ export function PaymentMethodSelector({
   onMethodChange,
   installments = 1,
   onInstallmentsChange,
+  totalAmount = 0,
 }: PaymentMethodSelectorProps) {
   return (
     <div className="space-y-4">
@@ -51,7 +78,19 @@ export function PaymentMethodSelector({
         <p className="text-sm text-gray-600 mt-1">Escolha como deseja pagar</p>
       </div>
 
-      <RadioGroup value={selectedMethod || ''} onValueChange={(value) => onMethodChange(value as PaymentMethod)}>
+      <RadioGroup 
+        value={selectedMethod || ''} 
+        onValueChange={(value) => {
+          onMethodChange(value as PaymentMethod);
+          // Resetar parcelamento quando mudar método de pagamento
+          if (onInstallmentsChange && value !== 'credit_card') {
+            onInstallmentsChange(1);
+          } else if (onInstallmentsChange && value === 'credit_card') {
+            // Resetar para null quando selecionar cartão de crédito
+            onInstallmentsChange(null);
+          }
+        }}
+      >
         <div className="grid gap-4">
           {paymentMethods.map((method) => {
             const Icon = method.icon;
@@ -113,17 +152,62 @@ export function PaymentMethodSelector({
             <CardDescription>Escolha em quantas vezes deseja parcelar</CardDescription>
           </CardHeader>
           <CardContent>
-            <select
-              value={installments}
-              onChange={(e) => onInstallmentsChange(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
-            >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
-                <option key={num} value={num}>
-                  {num}x {num === 1 ? 'sem juros' : 'com juros'}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-2">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => {
+                const installmentValue = totalAmount > 0 
+                  ? calculateInstallmentValue(totalAmount, num)
+                  : 0;
+                const formattedValue = installmentValue > 0
+                  ? `R$ ${installmentValue.toFixed(2).replace('.', ',')}`
+                  : '';
+                const isSelected = installments === num;
+                
+                return (
+                  <label
+                    key={num}
+                    className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      isSelected
+                        ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20'
+                        : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="installments"
+                        value={num}
+                        checked={isSelected}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          console.log('Installments select changed:', { value, installments });
+                          if (value) {
+                            const numValue = Number(value);
+                            console.log('Setting installments to:', numValue);
+                            onInstallmentsChange(numValue);
+                          } else {
+                            console.log('Resetting installments to null');
+                            onInstallmentsChange(null);
+                          }
+                        }}
+                        className="h-4 w-4 text-sky-500 focus:ring-sky-500"
+                      />
+                      <span className={`text-sm font-medium ${
+                        isSelected ? 'text-sky-700 dark:text-sky-300' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {num}x {num === 1 ? 'sem juros' : 'com juros'}
+                      </span>
+                    </div>
+                    {formattedValue && (
+                      <span className={`text-sm font-bold ${
+                        isSelected ? 'text-sky-600 dark:text-sky-400' : 'text-gray-600 dark:text-gray-400'
+                      }`}>
+                        {formattedValue}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       )}

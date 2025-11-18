@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Check, CheckCheck, Trash2, ShoppingCart, Package, AlertCircle, Tag, X } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, ShoppingCart, Package, AlertCircle, Tag, X, QrCode } from 'lucide-react';
 import { Button } from './ui/button';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,6 +33,7 @@ const typeIcons: Record<string, any> = {
   stock: Package,
   system: AlertCircle,
   coupon: Tag,
+  payment: QrCode,
 };
 
 const typeColors: Record<string, string> = {
@@ -40,6 +41,7 @@ const typeColors: Record<string, string> = {
   stock: 'text-orange-600',
   system: 'text-purple-600',
   coupon: 'text-green-600',
+  payment: 'text-emerald-600',
 };
 
 // Componente compartilhado para o conteúdo das notificações
@@ -98,7 +100,14 @@ function NotificationContent({
             <div className="flex items-start justify-between gap-1">
               <p className="text-[10px] sm:text-xs font-semibold leading-tight line-clamp-1">{notification.title}</p>
               {!isRead && (
-                <Badge variant="default" className="flex-shrink-0 bg-red-500 text-white text-[8px] px-1 py-0">
+                <Badge 
+                  variant="default" 
+                  className={`flex-shrink-0 text-white text-[8px] px-1 py-0 ${
+                    notification.type === 'payment' 
+                      ? 'bg-emerald-500' 
+                      : 'bg-red-500'
+                  }`}
+                >
                   Nova
                 </Badge>
               )}
@@ -164,10 +173,15 @@ function NotificationContent({
 }
 
 export function NotificationDropdown() {
-  const { unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
+  const { unreadCount, markAsRead, markAllAsRead, deleteNotification, notifications } = useNotifications();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Verificar se há notificações de pagamento pendente
+  const hasPendingPayment = notifications.some(
+    (n) => !n.isRead && n.type === 'payment'
+  );
 
   const handleNotificationClick = async (notification: any) => {
     if (!notification.isRead) {
@@ -181,6 +195,10 @@ export function NotificationDropdown() {
       } else {
         setLocation('/orders');
       }
+      setIsOpen(false);
+    } else if (notification.type === 'payment' && notification.data?.paymentId) {
+      // Navegar para página de pagamento PIX
+      setLocation(`/payment/${notification.data.paymentId}`);
       setIsOpen(false);
     } else if (notification.type === 'stock' && notification.data?.productId) {
       setLocation('/admin');
@@ -204,13 +222,20 @@ export function NotificationDropdown() {
       <Button
         variant="ghost"
         size="icon"
-        className="relative text-red-500 hover:bg-red-50"
+        className={`relative ${hasPendingPayment ? 'text-emerald-600 hover:bg-emerald-50' : 'text-red-500 hover:bg-red-50'}`}
         onClick={() => setIsOpen(true)}
       >
         <Bell className="h-6 w-6" />
       </Button>
       {unreadCount > 0 && (
-        <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white" style={{ fontSize: '11px', fontWeight: 700 }}>
+        <span 
+          className={`absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-white`}
+          style={{ 
+            fontSize: '11px', 
+            fontWeight: 700,
+            backgroundColor: hasPendingPayment ? '#10b981' : '#ef4444' // verde para pagamento pendente, vermelho para outras
+          }}
+        >
           {unreadCount > 9 ? '9+' : unreadCount}
         </span>
       )}

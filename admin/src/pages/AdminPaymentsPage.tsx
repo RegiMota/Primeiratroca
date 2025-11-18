@@ -250,7 +250,7 @@ export function AdminPaymentsPage() {
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="mock">Mock</SelectItem>
                   <SelectItem value="stripe">Stripe</SelectItem>
-                  <SelectItem value="mercadopago">Mercado Pago</SelectItem>
+                  <SelectItem value="asaas">Asaas</SelectItem>
                   <SelectItem value="pagseguro">PagSeguro</SelectItem>
                 </SelectContent>
               </Select>

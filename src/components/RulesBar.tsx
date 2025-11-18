@@ -55,7 +55,7 @@ export function RulesBar() {
           {
             icon: CreditCard,
             mainText: 'Parcele sem juros',
-            subText: 'Em até 6x',
+            subText: 'Em até 3x',
             color: '#9B59B6',
           },
         ]);

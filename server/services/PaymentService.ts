@@ -71,7 +71,7 @@ export class PaymentService {
       const payment = await prisma.payment.create({
         data: {
           orderId,
-          gateway: paymentData.gateway || 'mercadopago',
+          gateway: paymentData.gateway || 'asaas',
           gatewayPaymentId: paymentData.gatewayPaymentId || '',
           gatewayTransactionId: paymentData.gatewayTransactionId || null,
           paymentMethod: paymentData.paymentMethod,
@@ -143,9 +143,9 @@ export class PaymentService {
         };
       }
 
-      // Se for Mercado Pago, criar preferência ou pagamento
-      if (payment.gateway === 'mercadopago') {
-        const { MercadoPagoService } = await import('./MercadoPagoService');
+      // Se for Asaas, criar pagamento
+      if (payment.gateway === 'asaas') {
+        const { AsaasService } = await import('./AsaasService');
         
         // Buscar dados do pedido
         const order = payment.order;
@@ -168,88 +168,66 @@ export class PaymentService {
           };
         }
 
-        // Criar preferência de pagamento (Checkout Pro)
-        const preferenceResult = await MercadoPagoService.createPreference({
-          items: orderItems.map(item => {
-            const unitPrice = Number(item.price);
-            if (isNaN(unitPrice) || unitPrice <= 0) {
-              throw new Error(`Preço inválido para o item: ${item.product.name}`);
-            }
-            return {
-              title: item.product.name || 'Produto',
-              quantity: item.quantity || 1,
-              unit_price: unitPrice,
-            };
-          }),
-          payer: {
-            name: user?.name || undefined,
-            email: user?.email || undefined,
-          },
-          back_urls: {
-            success: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/checkout/success`,
-            failure: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/checkout/failure`,
-            pending: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/checkout/pending`,
-          },
-          // auto_return temporariamente removido para testar
-          // auto_return: 'approved', // Requer que back_urls.success esteja definido
+        // Calcular valor total
+        const totalAmount = orderItems.reduce((sum, item) => {
+          return sum + (Number(item.price) * item.quantity);
+        }, 0);
+
+        // Buscar CPF do usuário
+        const userWithCpf = await prisma.user.findUnique({
+          where: { id: order.userId },
+          select: { cpf: true },
+        });
+
+        // Criar pagamento no Asaas
+        const paymentResult = await AsaasService.createPayment({
+          amount: totalAmount,
+          orderId: order.id,
+          paymentMethod: payment.paymentMethod as 'credit_card' | 'debit_card' | 'pix' | undefined,
+          customerEmail: user?.email,
+          customerName: user?.name,
+          customerCpfCnpj: userWithCpf?.cpf || undefined,
+          description: `Pedido #${order.id}`,
           metadata: {
             paymentId: payment.id.toString(),
             orderId: order.id.toString(),
           },
         });
 
-        if (!preferenceResult.success || !preferenceResult.preference) {
+        if (!paymentResult.success || !paymentResult.payment) {
           return {
             success: false,
-            error: preferenceResult.error || 'Erro ao criar preferência no Mercado Pago'
+            error: paymentResult.error || 'Erro ao criar pagamento no Asaas'
           };
         }
 
-        // Atualizar pagamento com Preference ID
+        // Atualizar pagamento com dados do Asaas
         const updatedPayment = await prisma.payment.update({
           where: { id: paymentId },
           data: {
-            gatewayPaymentId: preferenceResult.preference.id,
-            status: 'processing',
-            statusDetail: 'Aguardando confirmação do pagamento',
-            gatewayTransactionId: preferenceResult.preference.id,
+            gatewayPaymentId: paymentResult.payment.id,
+            status: paymentResult.payment.status,
+            statusDetail: paymentResult.payment.statusDetail || 'Aguardando confirmação do pagamento',
+            gatewayTransactionId: paymentResult.payment.gatewayTransactionId || paymentResult.payment.id,
           }
         });
 
         // Log detalhado da resposta
-        console.log('=== Preference Result ===');
-        console.log('success:', preferenceResult.success);
-        console.log('hasPreference:', !!preferenceResult.preference);
-        console.log('preferenceResult.init_point:', preferenceResult.init_point);
-        console.log('preferenceResult.sandbox_init_point:', preferenceResult.sandbox_init_point);
-        console.log('preferenceResult.preference?.init_point:', preferenceResult.preference?.init_point);
-        console.log('preferenceResult.preference?.sandbox_init_point:', preferenceResult.preference?.sandbox_init_point);
-        console.log('preferenceResult.preference:', JSON.stringify(preferenceResult.preference, null, 2));
-        console.log('Full preferenceResult:', JSON.stringify(preferenceResult, null, 2));
+        console.log('=== Asaas Payment Result ===');
+        console.log('success:', paymentResult.success);
+        console.log('payment:', paymentResult.payment);
 
-        // Tentar acessar init_point de diferentes formas
-        const initPoint = 
-          preferenceResult.sandbox_init_point || 
-          preferenceResult.init_point ||
-          preferenceResult.preference?.sandbox_init_point ||
-          preferenceResult.preference?.init_point;
-
-        console.log('initPoint encontrado:', initPoint);
-
-        if (!initPoint) {
-          console.error('❌ Nenhum init_point encontrado na resposta do Mercado Pago');
-          return {
-            success: false,
-            error: 'URL de checkout não retornada pelo Mercado Pago. Verifique os logs do servidor.',
-          };
-        }
+        // Retornar URL de checkout se disponível (para boleto)
+        const checkoutUrl = paymentResult.init_point;
 
         return {
           success: true,
           payment: {
             ...updatedPayment,
-            init_point: preferenceResult.preference?.init_point || preferenceResult.init_point,
-            sandbox_init_point: preferenceResult.preference?.sandbox_init_point || preferenceResult.sandbox_init_point,
+            init_point: checkoutUrl || paymentResult.init_point,
+            pixCode: paymentResult.pixCode,
+            pixQrCodeBase64: paymentResult.pixQrCodeBase64,
+            pixExpiresAt: paymentResult.pixExpiresAt,
           }
         };
       }
@@ -313,7 +291,7 @@ export class PaymentService {
         }
       });
 
-      // Se pagamento aprovado, atualizar status do pedido
+      // Se pagamento aprovado, atualizar status do pedido e marcar notificações de pagamento como lidas
       if (status === 'approved' && payment.status !== 'approved') {
         await prisma.order.update({
           where: { id: payment.orderId },
@@ -321,6 +299,46 @@ export class PaymentService {
             status: 'processing'
           }
         });
+        
+        // Marcar notificações de pagamento pendente como lidas
+        try {
+          // Buscar notificações de pagamento não lidas do usuário
+          const notifications = await prisma.notification.findMany({
+            where: {
+              userId: payment.order.userId,
+              type: 'payment',
+              isRead: false,
+            },
+          });
+          
+          // Filtrar notificações que correspondem a este pagamento
+          const matchingNotifications = notifications.filter((notif) => {
+            if (!notif.data) return false;
+            try {
+              const data = JSON.parse(notif.data);
+              return data.paymentId === payment.id;
+            } catch {
+              return false;
+            }
+          });
+          
+          // Marcar como lidas
+          if (matchingNotifications.length > 0) {
+            await prisma.notification.updateMany({
+              where: {
+                id: {
+                  in: matchingNotifications.map((n) => n.id),
+                },
+              },
+              data: {
+                isRead: true,
+              },
+            });
+          }
+        } catch (notifError) {
+          console.error('Error marking payment notifications as read:', notifError);
+          // Não falhar se não conseguir marcar como lida
+        }
       }
 
       // Se pagamento rejeitado, manter pedido como pending
@@ -398,11 +416,11 @@ export class PaymentService {
         };
       }
 
-      // Se for Mercado Pago, processar reembolso via Mercado Pago
-      if (payment.gateway === 'mercadopago' && payment.gatewayPaymentId) {
-        const { MercadoPagoService } = await import('./MercadoPagoService');
+      // Se for Asaas, processar reembolso via Asaas
+      if (payment.gateway === 'asaas' && payment.gatewayPaymentId) {
+        const { AsaasService } = await import('./AsaasService');
         
-        const refundResult = await MercadoPagoService.refundPayment(
+        const refundResult = await AsaasService.refundPayment(
           payment.gatewayPaymentId,
           amount
         );
@@ -410,7 +428,7 @@ export class PaymentService {
         if (!refundResult.success) {
           return {
             success: false,
-            error: refundResult.error || 'Erro ao processar reembolso no Mercado Pago'
+            error: refundResult.error || 'Erro ao processar reembolso no Asaas'
           };
         }
 
@@ -421,7 +439,7 @@ export class PaymentService {
           where: { id: paymentId },
           data: {
             status: 'refunded',
-            statusDetail: `Reembolso de R$ ${refundAmount.toFixed(2)} processado via Mercado Pago`,
+            statusDetail: `Reembolso de R$ ${refundAmount.toFixed(2)} processado via Asaas`,
             webhookData: refundResult.refund ? JSON.stringify(refundResult.refund) : null,
           }
         });
@@ -480,9 +498,9 @@ export class PaymentService {
     try {
       console.log(`Processando webhook de ${gateway}`);
 
-      // Se for Mercado Pago, usar MercadoPagoService
-      if (gateway === 'mercadopago') {
-        const { MercadoPagoService } = await import('./MercadoPagoService');
+      // Se for Asaas, usar AsaasService
+      if (gateway === 'asaas') {
+        const { AsaasService } = await import('./AsaasService');
         
         // Converter body para JSON se for string
         let webhookData: any;
@@ -494,12 +512,12 @@ export class PaymentService {
           webhookData = body;
         }
         
-        const webhookResult = await MercadoPagoService.handleWebhook(webhookData);
+        const webhookResult = await AsaasService.handleWebhook(webhookData);
 
         if (!webhookResult.success) {
           return {
             success: false,
-            error: webhookResult.error || 'Erro ao processar webhook do Mercado Pago'
+            error: webhookResult.error || 'Erro ao processar webhook do Asaas'
           };
         }
 

@@ -46,8 +46,27 @@ router.post('/:ticketId/messages', authenticate, async (req: AuthRequest, res) =
     const ticketId = parseInt(req.params.ticketId);
     const { content, messageType, fileUrl, fileName, fileSize } = req.body;
 
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ error: 'Conteúdo da mensagem é obrigatório' });
+    console.log('📨 Nova mensagem recebida:', {
+      ticketId,
+      userId,
+      isAdmin,
+      hasContent: !!content,
+      hasFileUrl: !!fileUrl,
+      fileName,
+      fileSize,
+      messageType,
+      fileUrlLength: fileUrl ? fileUrl.length : 0,
+    });
+
+    // Permitir mensagens apenas com arquivo ou apenas com texto, mas pelo menos um deve existir
+    if ((!content || content.trim().length === 0) && !fileUrl) {
+      return res.status(400).json({ error: 'Conteúdo da mensagem ou arquivo é obrigatório' });
+    }
+
+    // Validar tamanho do fileUrl (base64 pode ser muito grande)
+    if (fileUrl && fileUrl.length > 50 * 1024 * 1024) { // 50MB em caracteres
+      console.error('❌ Arquivo muito grande:', fileUrl.length);
+      return res.status(400).json({ error: 'Arquivo muito grande. Tamanho máximo: 10MB.' });
     }
 
     // Verificar se o ticket existe e se o usuário tem acesso
@@ -68,18 +87,30 @@ router.post('/:ticketId/messages', authenticate, async (req: AuthRequest, res) =
     }
 
     // Criar mensagem
+    const messageData: any = {
+      ticketId,
+      senderId: userId,
+      senderIsAdmin: isAdmin,
+      content: content ? content.trim() : (fileUrl ? `Anexo: ${fileName || 'arquivo'}` : ''),
+      messageType: messageType || (fileUrl ? 'file' : 'text'),
+    };
+
+    // Adicionar campos de arquivo apenas se existirem
+    if (fileUrl) {
+      messageData.fileUrl = fileUrl;
+    }
+    if (fileName) {
+      messageData.fileName = fileName;
+    }
+    if (fileSize) {
+      messageData.fileSize = parseInt(fileSize.toString());
+    }
+
+    console.log('💾 Criando mensagem no banco de dados...');
     const message = await prisma.chatMessage.create({
-      data: {
-        ticketId,
-        senderId: userId,
-        senderIsAdmin: isAdmin,
-        content: content.trim(),
-        messageType: messageType || 'text',
-        fileUrl: fileUrl || null,
-        fileName: fileName || null,
-        fileSize: fileSize ? parseInt(fileSize) : null,
-      },
+      data: messageData,
     });
+    console.log('✅ Mensagem criada com sucesso:', message.id);
 
     // Atualizar status do ticket se necessário
     const updateData: any = {};
@@ -133,9 +164,32 @@ router.post('/:ticketId/messages', authenticate, async (req: AuthRequest, res) =
     emitChatMessage(ticketId, message);
 
     res.status(201).json(message);
-  } catch (error) {
-    console.error('Error creating message:', error);
-    res.status(500).json({ error: 'Erro ao criar mensagem' });
+  } catch (error: any) {
+    console.error('❌ Erro ao criar mensagem:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      meta: error.meta,
+      body: req.body ? { 
+        ...req.body, 
+        fileUrl: req.body.fileUrl ? `${req.body.fileUrl.substring(0, 50)}... (${req.body.fileUrl.length} chars)` : null,
+        contentLength: req.body.content?.length || 0,
+      } : null,
+    });
+    
+    // Erro específico do Prisma para campos muito grandes
+    if (error.code === 'P2000' || error.message?.includes('too large') || error.message?.includes('exceeds')) {
+      return res.status(400).json({
+        error: 'Arquivo muito grande',
+        details: 'O arquivo excede o tamanho máximo permitido. Tente comprimir a imagem antes de enviar.',
+      });
+    }
+
+    res.status(500).json({
+      error: 'Erro ao criar mensagem',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
   }
 });
 

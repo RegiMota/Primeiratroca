@@ -90,7 +90,7 @@ export function startLowStockCheckJob() {
 
 /**
  * Job 2: Liberar estoque reservado expirado (executa a cada 15 minutos)
- * Busca pedidos pendentes há mais de 15 minutos e libera estoque reservado
+ * Busca pedidos pendentes há mais de 1 hora e libera estoque reservado
  */
 export function startReleaseReservedStockJob() {
   // Executar a cada 15 minutos
@@ -98,15 +98,15 @@ export function startReleaseReservedStockJob() {
     try {
       console.log('[StockJob] Iniciando liberação de estoque reservado expirado...');
       
-      // Buscar pedidos pendentes há mais de 15 minutos
-      const fifteenMinutesAgo = new Date();
-      fifteenMinutesAgo.setMinutes(fifteenMinutesAgo.getMinutes() - 15);
+      // Buscar pedidos pendentes há mais de 1 hora (60 minutos)
+      const oneHourAgo = new Date();
+      oneHourAgo.setHours(oneHourAgo.getHours() - 1);
       
       const expiredPendingOrders = await prisma.order.findMany({
         where: {
           status: 'pending',
           createdAt: {
-            lt: fifteenMinutesAgo,
+            lt: oneHourAgo,
           },
         },
         include: {
@@ -195,7 +195,7 @@ export function startReleaseReservedStockJob() {
     timezone: 'America/Sao_Paulo',
   });
   
-  console.log('✅ Job de liberação de estoque reservado agendado (a cada 15 minutos)');
+  console.log('✅ Job de liberação de estoque reservado agendado (a cada 15 minutos, cancela pedidos após 1 hora)');
 }
 
 /**

@@ -304,9 +304,14 @@ export function WishlistPage() {
                     <Button
                       variant="outline"
                       onClick={() => {
-                        // Salvar IDs no localStorage e navegar para página de comparação
-                        localStorage.setItem('compareProducts', JSON.stringify(selectedItems));
-                        setLocation(`/compare?ids=${selectedItems.join(',')}`);
+                        // Mapear IDs dos itens da wishlist para IDs dos produtos
+                        const productIds = items
+                          .filter(item => selectedItems.includes(item.id))
+                          .map(item => item.productId);
+                        
+                        // Salvar IDs dos produtos no localStorage e navegar para página de comparação
+                        localStorage.setItem('compareProducts', JSON.stringify(productIds));
+                        setLocation(`/compare?ids=${productIds.join(',')}`);
                       }}
                       className="rounded-full border-2 border-purple-300 dark:border-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-400 dark:hover:border-purple-500 text-purple-700 dark:text-purple-300 font-semibold transition-all"
                     >

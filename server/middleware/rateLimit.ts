@@ -97,10 +97,12 @@ export const adminRateLimiter = rateLimit({
 /**
  * Rate Limiter para Checkout
  * Proteção contra abuso durante checkout
+ * Limite muito mais permissivo em desenvolvimento
  */
 export const checkoutRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 10, // 10 tentativas de checkout por IP a cada 15 minutos
+  // Aumentar drasticamente o limite em desenvolvimento para evitar 429 durante testes
+  max: process.env.NODE_ENV === 'production' ? 10 : 100, // Produção: 10, Desenvolvimento: 100
   message: {
     error: 'Muitas tentativas de checkout. Tente novamente em 15 minutos.',
   },
@@ -111,6 +113,10 @@ export const checkoutRateLimiter = rateLimit({
       error: 'Muitas tentativas de checkout. Tente novamente em 15 minutos.',
       retryAfter: Math.ceil(15 * 60),
     });
+  },
+  // Desabilitar completamente em desenvolvimento se DISABLE_RATE_LIMIT=true
+  skip: (req: Request) => {
+    return process.env.NODE_ENV !== 'production' && process.env.DISABLE_RATE_LIMIT === 'true';
   },
 });
 

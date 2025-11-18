@@ -33,7 +33,7 @@ export function CheckoutSuccessPage() {
     try {
       // Buscar pagamento pelo preference_id (gatewayPaymentId)
       const payments = await paymentsAPI.getAll();
-      const payment = payments.find((p: any) => p.gatewayPaymentId === preferenceId);
+      const payment = payments.find((p: { gatewayPaymentId?: string }) => p.gatewayPaymentId === preferenceId);
       
       if (payment && payment.gatewayPaymentId) {
         verifyPayment(payment.gatewayPaymentId);
@@ -51,7 +51,7 @@ export function CheckoutSuccessPage() {
     try {
       // Buscar pagamento no nosso sistema
       const payments = await paymentsAPI.getAll();
-      const payment = payments.find((p: any) => p.gatewayPaymentId === mpPaymentId);
+      const payment = payments.find((p: { gatewayPaymentId?: string; status?: string }) => p.gatewayPaymentId === mpPaymentId);
       
       if (payment) {
         // Verificar status do pagamento

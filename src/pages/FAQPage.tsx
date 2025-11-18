@@ -54,7 +54,7 @@ export function FAQPage() {
   const loadFAQs = async () => {
     try {
       setLoading(true);
-      const params: any = {};
+      const params: FAQSearchParams = {};
       if (categoryFilter !== 'all') params.category = categoryFilter;
       if (searchQuery.trim()) params.search = searchQuery.trim();
 

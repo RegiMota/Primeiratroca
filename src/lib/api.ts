@@ -50,8 +50,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Log de erros para debug
-    if (process.env.NODE_ENV === 'development') {
+    // Não logar erros 404 esperados (recursos não encontrados são comuns)
+    const isExpected404 = error.response?.status === 404;
+    
+    // Log de erros para debug (exceto 404 esperados)
+    if (process.env.NODE_ENV === 'development' && !isExpected404) {
       console.error('API Error:', {
         url: error.config?.url,
         method: error.config?.method,
@@ -118,8 +121,14 @@ export const authAPI = {
     return response.data;
   },
 
-  register: async (name: string, email: string, password: string) => {
-    const response = await api.post('/auth/register', { name, email, password });
+  register: async (name: string, email: string, password: string, cpf?: string, birthDate?: string) => {
+    const response = await api.post('/auth/register', { 
+      name, 
+      email, 
+      password,
+      cpf: cpf || undefined,
+      birthDate: birthDate || undefined,
+    });
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
@@ -165,6 +174,11 @@ export const authAPI = {
     }
     return response.data;
   },
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const response = await api.post('/auth/change-password', { currentPassword, newPassword });
+    return response.data;
+  },
 };
 
 // ============================================
@@ -191,9 +205,23 @@ export const productsAPI = {
     return response.data;
   },
 
-  getById: async (id: number) => {
+  getById: async (id: number, silent404: boolean = false) => {
+    try {
     const response = await api.get(`/products/${id}`);
     return response.data;
+    } catch (error: any) {
+      // Se for 404 e silent404 estiver ativado, retornar null em vez de lançar erro
+      if (silent404 && error.response?.status === 404) {
+        // Retornar null silenciosamente sem propagar o erro
+        return null;
+      }
+      // Para outros erros ou quando silent404=false, propagar o erro normalmente
+      // Mas não logar 404s quando silent404=true (já foi tratado acima)
+      if (!silent404 || error.response?.status !== 404) {
+        throw error;
+      }
+      return null;
+    }
   },
 
   getBestSelling: async (limit?: number) => {
@@ -319,8 +347,18 @@ export const reviewsAPI = {
     return response.data;
   },
 
-  create: async (productId: number, rating: number, comment?: string) => {
-    const response = await api.post('/reviews', { productId, rating, comment: comment || '' });
+  create: async (productId: number, rating: number, comment?: string, images?: string[]) => {
+    const response = await api.post('/reviews', { 
+      productId, 
+      rating, 
+      comment: comment || '', 
+      images: images && images.length > 0 ? images : undefined 
+    });
+    return response.data;
+  },
+
+  delete: async (reviewId: number) => {
+    const response = await api.delete(`/reviews/${reviewId}`);
     return response.data;
   },
 };
@@ -403,13 +441,13 @@ export const paymentsAPI = {
     return response.data;
   },
 
-  // Mercado Pago - Processar pagamento (criar preferência)
+  // Asaas - Processar pagamento (criar pagamento)
   process: async (paymentId: number) => {
     const response = await api.post(`/payments/process/${paymentId}`);
     return response.data;
   },
 
-  // Mercado Pago - Confirmar pagamento (Checkout Transparente)
+  // Asaas - Confirmar pagamento (Checkout Transparente)
   confirm: async (paymentId: number, token: string, installments?: number, paymentMethodId?: string) => {
     const response = await api.post('/payments/confirm', {
       paymentId,
@@ -418,6 +456,63 @@ export const paymentsAPI = {
       paymentMethodId,
     });
     return response.data;
+  },
+
+  // Asaas - Processar pagamento PIX diretamente (Checkout Transparente)
+  processPix: async (paymentId: number) => {
+    const response = await api.post(`/payments/process-pix/${paymentId}`);
+    return response.data;
+  },
+
+  // Asaas - Preparar dados do cartão (não tokeniza, apenas formata)
+  tokenizeCard: async (data: {
+    cardNumber: string;
+    cardExpirationMonth: string;
+    cardExpirationYear: string;
+    securityCode: string;
+    cardholderName: string;
+    identificationType: string;
+    identificationNumber: string;
+  }) => {
+    try {
+      const response = await api.post('/payments/tokenize-card', data);
+      return response.data;
+    } catch (error: any) {
+      console.error('API tokenizeCard error:', error);
+      console.error('Error response data:', error.response?.data);
+      // Re-throw para que o CheckoutPage possa tratar
+      throw error;
+    }
+  },
+
+  // Asaas - Processar pagamento com cartão diretamente (Checkout Transparente)
+  processCard: async (data: {
+    paymentId: number;
+    token: string;
+    installments?: number;
+    paymentMethodId?: string;
+  }) => {
+    try {
+      // Log detalhado antes de enviar
+      console.log('📤 Enviando dados para processCard:', {
+        paymentId: data.paymentId,
+        hasToken: !!data.token,
+        installments: data.installments,
+        installmentsType: typeof data.installments,
+        installmentsIsUndefined: data.installments === undefined,
+        installmentsIsNull: data.installments === null,
+        paymentMethodId: data.paymentMethodId,
+        fullData: JSON.stringify(data),
+      });
+      
+      const response = await api.post('/payments/process-card', data);
+      return response.data;
+    } catch (error: any) {
+      console.error('API processCard error:', error);
+      console.error('Error response data:', error.response?.data);
+      // Re-throw para que o CheckoutPage possa tratar
+      throw error;
+    }
   },
 };
 
@@ -458,13 +553,64 @@ export const stockAPI = {
 
 export const shippingAPI = {
   calculate: async (data: {
-    originZipCode: string;
-    destinationZipCode: string;
+    zipCode?: string; // CEP de destino (formato antigo para compatibilidade)
+    originZipCode?: string; // CEP de origem
+    destinationZipCode?: string; // CEP de destino
     weight: number;
-    dimensions: { height: number; width: number; length: number };
+    dimensions?: { height: number; width: number; length: number };
     value?: number;
+    items?: Array<{ productId: number; quantity: number }>; // Itens para calcular dimensões
   }) => {
-    const response = await api.post('/shipping/calculate', data);
+    // Se zipCode foi fornecido, usar como destinationZipCode
+    const destinationZipCode = data.destinationZipCode || data.zipCode;
+    
+    // Se não tiver originZipCode, usar CEP padrão (Av. Paulista, SP)
+    // O backend também tem um CEP padrão, mas vamos enviar explicitamente
+    const originZipCode = data.originZipCode || '01310100'; // CEP padrão: Av. Paulista, SP
+    
+    // Se não tiver dimensions mas tiver items, calcular dimensões padrão
+    let dimensions = data.dimensions;
+    if (!dimensions && data.items) {
+      // Calcular dimensões baseado nos itens (dimensões padrão)
+      const totalItems = data.items.reduce((sum, item) => sum + item.quantity, 0);
+      // Dimensões padrão: 20x20x20cm por item (mínimo)
+      dimensions = {
+        height: Math.max(20, totalItems * 5), // Altura mínima 20cm, +5cm por item
+        width: 20,
+        length: 20,
+      };
+    } else if (!dimensions) {
+      // Dimensões padrão se não tiver nem dimensions nem items
+      dimensions = {
+        height: 20,
+        width: 20,
+        length: 20,
+      };
+    }
+    
+    // Validar que destinationZipCode foi fornecido
+    if (!destinationZipCode) {
+      throw new Error('CEP de destino é obrigatório');
+    }
+    
+    const requestData: {
+      originZipCode: string;
+      destinationZipCode: string;
+      weight: number;
+      dimensions: { height: number; width: number; length: number };
+      value?: number;
+    } = {
+      originZipCode: originZipCode,
+      destinationZipCode: destinationZipCode,
+      weight: data.weight,
+      dimensions: dimensions,
+    };
+    
+    if (data.value) {
+      requestData.value = data.value;
+    }
+    
+    const response = await api.post('/shipping/calculate', requestData);
     return response.data;
   },
 
@@ -623,6 +769,11 @@ export const settingsAPI = {
 
   getHeroSlides: async () => {
     const response = await api.get('/settings/hero-slides');
+    return response.data;
+  },
+
+  getTheme: async () => {
+    const response = await api.get('/settings/theme');
     return response.data;
   },
 

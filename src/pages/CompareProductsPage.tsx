@@ -50,7 +50,7 @@ export function CompareProductsPage() {
       // Tentar buscar do localStorage
       const savedIds = localStorage.getItem('compareProducts');
       if (savedIds) {
-        ids = JSON.parse(savedIds).map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id));
+        ids = JSON.parse(savedIds).map((id: string | number) => parseInt(String(id))).filter((id: number) => !isNaN(id));
       }
     }
 
@@ -67,23 +67,42 @@ export function CompareProductsPage() {
   const loadProducts = async (ids: number[]) => {
     try {
       setLoading(true);
-      const productPromises = ids.map(id => productsAPI.getById(id).catch(err => {
-        console.error(`Error loading product ${id}:`, err);
+      
+      // Usar silent404=true para não propagar erros 404 (produtos não encontrados são esperados)
+      // Com silent404=true, getById retorna null em vez de lançar erro para 404
+      const productPromises = ids.map(async (id) => {
+        try {
+          return await productsAPI.getById(id, true);
+        } catch (err: any) {
+          // Apenas logar erros que não sejam 404 (outros tipos de erro)
+          if (err.response?.status !== 404) {
+            console.error(`Erro ao carregar produto ${id}:`, err);
+          }
         return null; // Retornar null para produtos que falharam
-      }));
+        }
+      });
       const productsData = await Promise.all(productPromises);
+      
       // Filtrar produtos nulos (que falharam ao carregar)
       const validProducts = productsData.filter((p): p is Product => p !== null);
       setProducts(validProducts);
       
+      // Se nenhum produto foi carregado, redirecionar
+      if (validProducts.length === 0) {
+        toast.error('Nenhum produto válido encontrado para comparação');
+        setLocation('/wishlist');
+        return;
+      }
+      
       // Se alguns produtos falharam, mostrar aviso
       if (validProducts.length < productsData.length) {
         const failedCount = productsData.length - validProducts.length;
-        toast.warning(`${failedCount} produto(s) não puderam ser carregados`);
+        toast.warning(`${failedCount} produto(s) não puderam ser carregados e foram removidos da comparação`);
       }
     } catch (error: any) {
-      console.error('Error loading products:', error);
-      toast.error(error.message || 'Erro ao carregar produtos');
+      console.error('Erro ao carregar produtos:', error);
+      toast.error('Erro ao carregar produtos para comparação');
+      setLocation('/wishlist');
     } finally {
       setLoading(false);
     }

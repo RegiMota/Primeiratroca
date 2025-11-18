@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation } from 'wouter';
 import { adminAPI } from '../lib/api';
+import { Order } from '../types';
 import { Download, Calendar, DollarSign, Package, ShoppingCart, TrendingUp } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -319,7 +320,7 @@ export function AdminReportsPage() {
                 {reportData.orders.length === 0 ? (
                   <p className="text-center text-gray-600 py-8">Nenhum pedido encontrado no período selecionado</p>
                 ) : (
-                  reportData.orders.slice(0, 20).map((order: any) => (
+                  reportData.orders.slice(0, 20).map((order: Order) => (
                     <div key={order.id} className="rounded-lg border p-4">
                       <div className="flex items-center justify-between mb-2">
                         <div>

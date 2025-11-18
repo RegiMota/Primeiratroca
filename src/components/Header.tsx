@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, LogOut, Heart, X, ChevronDown, Phone, Mail, MapPin } from 'lucide-react';
 import { Button } from './ui/button';
 import { useCart } from '../contexts/CartContext';
@@ -31,7 +31,7 @@ function TopPromoBar() {
       bgStyle: { backgroundColor: '#059669' }
     },
     { 
-      text: '💳 Parcele em até 12x sem juros', 
+      text: '💳 Parcele em até 3x sem juros', 
       bgColor: 'bg-blue-600', 
       textColor: 'text-white',
       bgStyle: { backgroundColor: '#2563eb' }
@@ -232,6 +232,7 @@ function BottomNav() {
 // Handler para busca no header
 function HeaderSearchBar() {
   const [, setLocation] = useLocation();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = (query: string) => {
     if (query.trim()) {
@@ -241,9 +242,30 @@ function HeaderSearchBar() {
     }
   };
 
+  // Escutar evento para focar na barra de busca (disparado pelo MobileTabBar)
+  useEffect(() => {
+    const handleFocusSearch = () => {
+      // Aguardar um pouco para garantir que a página carregou
+      setTimeout(() => {
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          // Scroll suave até a barra de busca em mobile
+          if (window.innerWidth < 768) {
+            searchInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      }, 200);
+    };
+
+    window.addEventListener('focusSearchBar', handleFocusSearch);
+    return () => {
+      window.removeEventListener('focusSearchBar', handleFocusSearch);
+    };
+  }, []);
+
   return (
-    <div className="flex-1 max-w-2xl mx-4">
-      <SearchBar onSearch={handleSearch} />
+    <div className="w-full">
+      <SearchBar onSearch={handleSearch} inputRef={searchInputRef} />
     </div>
   );
 }
@@ -253,12 +275,16 @@ export function Header() {
   const { user, logout, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [logo, setLogo] = useState<string | null>(null);
+  const [logoLink, setLogoLink] = useState<string>('/');
+  const [logoSize, setLogoSize] = useState<string>('150px');
 
   useEffect(() => {
     const loadLogo = async () => {
       try {
         const data = await settingsAPI.getLogo();
         setLogo(data.logo);
+        setLogoLink(data.logoLink || '/');
+        setLogoSize(data.logoSize || '150px');
       } catch (error) {
         console.error('Error loading logo:', error);
       }
@@ -272,106 +298,122 @@ export function Header() {
       
       <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm transition-colors">
         <div className="mx-auto max-w-7xl px-4 lg:px-6">
-          {/* Header Principal */}
-          <div className="flex items-center justify-between gap-4 pb-2" style={{ minHeight: '120px', paddingTop: '8px', paddingBottom: '8px' }}>
-            {/* Logo com Slogan */}
+          {/* Logo Centralizada no Topo */}
+          <div className="flex justify-center py-3 md:py-4">
             <button
-              onClick={() => setLocation('/')}
-              className="flex items-center gap-3 flex-shrink-0 transition-transform duration-200 hover:scale-105 active:scale-95"
+              onClick={() => {
+                // Verificar se é link externo ou interno
+                if (logoLink.startsWith('http://') || logoLink.startsWith('https://')) {
+                  window.open(logoLink, '_blank');
+                } else {
+                  setLocation(logoLink);
+                }
+              }}
+              className="flex items-center gap-3 transition-transform duration-200 hover:scale-105 active:scale-95"
             >
               {logo ? (
                 <img
                   src={logo}
                   alt="Logo"
-                  style={{ height: '100px', width: 'auto', maxWidth: '300px' }}
+                  style={{ 
+                    height: logoSize || '150px', 
+                    width: 'auto', 
+                    maxWidth: '500px' 
+                  }}
                   className="object-contain"
                 />
               ) : (
-                <div className="flex items-center gap-3">
-                  <div className="flex h-24 w-24 items-center justify-center">
-                    <Heart className="h-20 w-20 text-amber-700" strokeWidth={1.5} />
+                <div className="flex items-center gap-4 md:gap-5">
+                  <div className="flex h-28 w-28 md:h-40 md:w-40 items-center justify-center">
+                    <Heart className="h-24 w-24 md:h-36 md:w-36 text-amber-700" strokeWidth={1.5} />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-lg text-amber-700 font-normal">vestir com</span>
-                    <span className="text-3xl font-bold text-amber-600 leading-tight">amor</span>
+                    <span className="text-lg md:text-2xl text-amber-700 font-normal">vestir com</span>
+                    <span className="text-4xl md:text-5xl font-bold text-amber-600 leading-tight">amor</span>
                   </div>
                 </div>
               )}
             </button>
+          </div>
 
+          {/* Barra de Busca com Ícones Laterais */}
+          <div className="flex items-center justify-center gap-2 md:gap-4 pb-3 md:pb-4">
             {/* Barra de Busca - Central */}
-            <HeaderSearchBar />
+            <div className="flex-1 max-w-2xl min-w-0">
+              <HeaderSearchBar />
+            </div>
 
-            {/* Ações do Usuário - Direita */}
-            <div className="flex items-center gap-4">
-              {/* Busca Mobile */}
-              {/* Entre ou Cadastre-se / Usuário */}
-              {isAuthenticated ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="flex items-center gap-2 text-gray-700 hover:text-amber-700">
-                      <User className="h-5 w-5" />
-                      <span className="hidden lg:inline text-sm font-medium">{user?.name?.split(' ')[0]}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56 bg-white border-gray-200">
-                    <DropdownMenuItem onClick={() => setLocation('/profile')} className="text-gray-900 hover:bg-gray-100">
-                      <User className="mr-2 h-4 w-4" />
-                      Meu Perfil
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setLocation('/orders')} className="text-gray-900 hover:bg-gray-100">
-                      Meus Pedidos
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLocation('/addresses')} className="text-gray-900 hover:bg-gray-100">
-                      Endereços
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLocation('/wishlist')} className="text-gray-900 hover:bg-gray-100">
-                      <Heart className="mr-2 h-4 w-4" />
-                      Lista de Desejos
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLocation('/tickets')} className="text-gray-900 hover:bg-gray-100">
-                      Suporte
-                    </DropdownMenuItem>
-                    {user?.isAdmin && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => window.open('http://localhost:3001', '_blank')} className="text-gray-900 hover:bg-gray-100">
-                          Painel Admin
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={logout} className="text-gray-900 hover:bg-gray-100">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sair
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <Button
-                  onClick={() => setLocation('/login')}
-                  variant="ghost"
-                  className="flex items-center gap-2 text-gray-700 hover:text-amber-700"
-                >
-                  <User className="h-5 w-5" />
-                  <span className="hidden sm:inline text-sm font-medium">Entre ou Cadastre-se</span>
-                  <span className="sm:hidden text-sm font-medium">Entrar</span>
-                </Button>
-              )}
+            {/* Ícones à Direita da Barra de Busca */}
+            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+              {/* Entre ou Cadastre-se / Usuário - Oculto no mobile */}
+              <div className="hidden md:flex items-center">
+                {isAuthenticated ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="flex items-center gap-1 md:gap-2 text-gray-700 hover:text-amber-700 p-1.5 md:p-2">
+                        <User className="h-4 w-4 md:h-5 md:w-5" />
+                        <span className="hidden lg:inline text-xs md:text-sm font-medium">{user?.name?.split(' ')[0]}</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56 bg-white border-gray-200">
+                      <DropdownMenuItem onClick={() => setLocation('/profile')} className="text-gray-900 hover:bg-gray-100">
+                        <User className="mr-2 h-4 w-4" />
+                        Meu Perfil
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setLocation('/orders')} className="text-gray-900 hover:bg-gray-100">
+                        Meus Pedidos
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setLocation('/addresses')} className="text-gray-900 hover:bg-gray-100">
+                        Endereços
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setLocation('/wishlist')} className="text-gray-900 hover:bg-gray-100">
+                        <Heart className="mr-2 h-4 w-4" />
+                        Lista de Desejos
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setLocation('/tickets')} className="text-gray-900 hover:bg-gray-100">
+                        Suporte
+                      </DropdownMenuItem>
+                      {user?.isAdmin && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => window.open('http://localhost:3001', '_blank')} className="text-gray-900 hover:bg-gray-100">
+                            Painel Admin
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={logout} className="text-gray-900 hover:bg-gray-100">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sair
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Button
+                    onClick={() => setLocation('/login')}
+                    variant="ghost"
+                    className="flex items-center gap-1 md:gap-2 text-gray-700 hover:text-amber-700 p-1.5 md:p-2"
+                  >
+                    <User className="h-4 w-4 md:h-5 md:w-5" />
+                    <span className="hidden sm:inline text-xs md:text-sm font-medium">Entre ou Cadastre-se</span>
+                    <span className="sm:hidden text-xs md:text-sm font-medium">Entrar</span>
+                  </Button>
+                )}
+              </div>
 
-              {/* Notificações */}
+              {/* Notificações - Sempre visível */}
               {isAuthenticated && <NotificationDropdown />}
 
-              {/* Carrinho */}
-              <div className="relative">
+              {/* Carrinho - Oculto no mobile */}
+              <div className="hidden md:block relative">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setLocation('/cart')}
-                  className="text-amber-700 hover:text-amber-800"
+                  className="text-amber-700 hover:text-amber-800 h-8 w-8 md:h-10 md:w-10"
                 >
-                  <ShoppingCart className="h-5 w-5" />
+                  <ShoppingCart className="h-4 w-4 md:h-5 md:w-5" />
                 </Button>
                 {totalItems > 0 && (
                   <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold shadow-md -translate-y-1/2 translate-x-1/2">
@@ -379,7 +421,6 @@ export function Header() {
                   </span>
                 )}
               </div>
-
             </div>
           </div>
         </div>

@@ -1,8 +1,9 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { cn } from "@/lib/utils";
+import { AlertTriangle, RotateCcw } from "lucide-react";
+import { Component, ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
-  fallback?: ReactNode;
 }
 
 interface State {
@@ -10,45 +11,47 @@ interface State {
   error: Error | null;
 }
 
-export class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    // Suprimir erros conhecidos do React Strict Mode com portais
-    if (error.name === 'NotFoundError' && error.message.includes('removeChild')) {
-      // Não definir hasError para esses erros, apenas logar silenciosamente
-      return { hasError: false, error: null };
-    }
     return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Suprimir erros conhecidos do React Strict Mode com portais
-    if (error.name === 'NotFoundError' && error.message.includes('removeChild')) {
-      // Erro conhecido do React Strict Mode com portais do Radix UI
-      // Não fazer nada, apenas suprimir
-      return;
-    }
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        this.props.fallback || (
-          <div className="rounded-2xl bg-red-50 p-6 text-center">
-            <p className="text-red-600">Ocorreu um erro ao carregar este componente.</p>
+        <div className="flex items-center justify-center min-h-screen p-8 bg-background">
+          <div className="flex flex-col items-center w-full max-w-2xl p-8">
+            <AlertTriangle
+              size={48}
+              className="text-destructive mb-6 flex-shrink-0"
+            />
+
+            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
+
+            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
+              <pre className="text-sm text-muted-foreground whitespace-break-spaces">
+                {this.state.error?.stack}
+              </pre>
+            </div>
+
             <button
-              onClick={() => this.setState({ hasError: false, error: null })}
-              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+              onClick={() => window.location.reload()}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg",
+                "bg-primary text-primary-foreground",
+                "hover:opacity-90 cursor-pointer"
+              )}
             >
-              Tentar novamente
+              <RotateCcw size={16} />
+              Reload Page
             </button>
           </div>
-        )
+        </div>
       );
     }
 
@@ -56,3 +59,4 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
+export default ErrorBoundary;

@@ -1,0 +1,22 @@
+import { ReactNode } from 'react';
+import { Header } from './Header';
+import { Footer } from './Footer';
+import { MobileTabBar } from './MobileTabBar';
+
+interface LayoutProps {
+  children: ReactNode;
+}
+
+export function Layout({ children }: LayoutProps) {
+  return (
+    <div className="min-h-screen flex flex-col bg-white overflow-x-hidden" style={{ width: '100%', maxWidth: '100vw' }}>
+      <Header />
+      <main className="flex-1 pb-20 md:pb-0 w-full overflow-x-hidden">
+        {children}
+      </main>
+      <Footer />
+      <MobileTabBar />
+    </div>
+  );
+}
+

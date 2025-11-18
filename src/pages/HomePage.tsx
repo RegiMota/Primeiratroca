@@ -44,7 +44,7 @@ function BenefitsSection() {
     {
       icon: CreditCard,
       title: 'Parcele sem juros',
-      description: 'Em até 6x',
+      description: 'Em até 3x',
       cardColor: '#9B59B6', // Roxo
       iconBg: '#9B59B6',
     },

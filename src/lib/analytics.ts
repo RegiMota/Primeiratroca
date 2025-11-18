@@ -171,5 +171,14 @@ export const AnalyticsEvents = {
       content_id: contentId,
     });
   },
+
+  // Compartilhar produto
+  share: (productId: string, method: string) => {
+    trackEvent('share', {
+      method,
+      content_type: 'product',
+      content_id: productId,
+    });
+  },
 };
 

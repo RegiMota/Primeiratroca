@@ -17,7 +17,7 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, cpf?: string, birthDate?: string) => Promise<void>;
   updateUser: (userData: User) => void;
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
@@ -100,9 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('user');
   };
 
-  const register = async (name: string, email: string, password: string) => {
+  const register = async (name: string, email: string, password: string, cpf?: string, birthDate?: string) => {
     try {
-      const response = await authAPI.register(name, email, password);
+      const response = await authAPI.register(name, email, password, cpf, birthDate);
       setUser(response.user);
     } catch (error: any) {
       const errorMessage = error.message || error.response?.data?.error || 'Erro ao criar conta';

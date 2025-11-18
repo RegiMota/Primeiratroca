@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -133,9 +133,20 @@ model Review {
   comment   String?  @db.Text // Opcional - apenas quem comprou pode comentar
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  images    ReviewImage[] // Imagens da avaliação
   
   @@unique([productId, userId]) // Um usuário pode avaliar um produto apenas uma vez
   @@map("reviews")
+}
+
+model ReviewImage {
+  id        Int      @id @default(autoincrement())
+  reviewId  Int
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  imageUrl  String   @db.Text // URL da imagem (base64 ou URL) - Text para suportar imagens grandes
+  createdAt DateTime @default(now())
+  
+  @@map("review_images")
 }
 
 model Settings {
@@ -218,12 +229,12 @@ model Payment {
   order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   
   // Informações do Gateway
-  gateway         String   @db.VarChar(50)            // 'stripe', 'mercadopago', 'pagseguro'
+  gateway         String   @db.VarChar(50)            // 'asaas', 'stripe', 'pagseguro'
   gatewayPaymentId String  @db.VarChar(255)           // ID do pagamento no gateway
   gatewayTransactionId String? @db.VarChar(255)       // ID da transação no gateway
   
   // Método de Pagamento
-  paymentMethod   String   @db.VarChar(50)            // 'credit_card', 'pix', 'boleto'
+  paymentMethod   String   @db.VarChar(50)            // 'credit_card', 'debit_card', 'pix', 'boleto'
   installments    Int      @default(1)                // Número de parcelas
   
   // Valores
@@ -241,6 +252,7 @@ model Payment {
   
   // PIX
   pixCode         String?  @db.Text                    // Código PIX (QR Code)
+  pixQrCodeBase64 String?  @db.Text                    // QR Code em base64 (imagem)
   pixExpiresAt    DateTime?                            // Expiração do PIX
   
   // Boleto
@@ -582,10 +594,12 @@ model HeroSlide {
 // Modelo para cards de benefícios (RulesBar)
 model BenefitCard {
   id          Int      @id @default(autoincrement())
-  iconName    String   @db.VarChar(100) // Nome do ícone (ex: 'Send', 'RefreshCw', 'CreditCard')
+  iconName    String?  @db.VarChar(100) // Nome do ícone (ex: 'Send', 'RefreshCw', 'CreditCard')
+  imageUrl    String?  @db.Text // URL da imagem (opcional, alternativa ao ícone)
   mainText    String   @db.VarChar(255)
   subText     String   @db.VarChar(255)
   color       String?  @db.VarChar(7) // Cor do card em formato hex (#FF6B35)
+  link        String?  @db.VarChar(500) // Link para redirecionamento ao clicar no card
   order       Int      @default(0) // Ordem de exibição
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())

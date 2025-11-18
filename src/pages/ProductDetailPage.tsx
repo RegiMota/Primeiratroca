@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { ArrowLeft, Minus, Plus, ShoppingCart, Star, Heart } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, ShoppingCart, Star, Heart, Share2, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { productsAPI, reviewsAPI, stockAPI, wishlistAPI } from '../lib/api';
-import { Product } from '../lib/mockData';
+import { ProductWithImages } from '../types';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
@@ -12,14 +12,21 @@ import { toast } from 'sonner';
 import { AnalyticsEvents } from '../lib/analytics';
 import { Label } from '../components/ui/label';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
-import { Textarea } from '../components/ui/textarea';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '../components/ui/dialog';
+
+interface ReviewImage {
+  id: number;
+  reviewId: number;
+  imageUrl: string;
+  createdAt: string;
+}
 
 interface Review {
   id: number;
@@ -33,6 +40,7 @@ interface Review {
     name: string;
     email: string;
   };
+  images?: ReviewImage[];
 }
 
 export function ProductDetailPage() {
@@ -41,7 +49,7 @@ export function ProductDetailPage() {
   const { addToCart } = useCart();
   const { isAuthenticated, user, loading: authLoading } = useAuth();
 
-  const [product, setProduct] = useState<Product | null>(null);
+  const [product, setProduct] = useState<ProductWithImages | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState('');
@@ -52,14 +60,16 @@ export function ProductDetailPage() {
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
-  const [hasPurchased, setHasPurchased] = useState(false);
-  const [checkingPurchase, setCheckingPurchase] = useState(false);
+  
+  // Estados para modal de imagens das avaliações
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [selectedReviewImages, setSelectedReviewImages] = useState<ReviewImage[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
   // Novo estado para variações (v2.0)
-  const [variants, setVariants] = useState<any[]>([]);
-  const [selectedVariant, setSelectedVariant] = useState<any | null>(null);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [loadingVariants, setLoadingVariants] = useState(true);
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
   const [availableColors, setAvailableColors] = useState<string[]>([]);
@@ -97,17 +107,8 @@ export function ProductDetailPage() {
               console.error('Error checking wishlist:', error);
             }
             
-            // Verificar se usuário comprou o produto
-            try {
-              setCheckingPurchase(true);
-              const purchaseCheck = await reviewsAPI.checkPurchase(productId);
-              setHasPurchased(purchaseCheck.hasPurchased || false);
-            } catch (error) {
-              console.error('Error checking purchase:', error);
-              setHasPurchased(false);
-            } finally {
-              setCheckingPurchase(false);
-            }
+            // Não precisa verificar compra na página de detalhes
+            // Avaliação completa (com texto e fotos) deve ser feita na página de pedidos
           }
           
           // Carregar variações do produto (v2.0)
@@ -171,6 +172,28 @@ export function ProductDetailPage() {
     loadProduct();
   }, [params?.id, isAuthenticated]);
 
+  // Navegação com teclado no modal de imagens
+  useEffect(() => {
+    if (!isImageModalOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsImageModalOpen(false);
+      } else if (e.key === 'ArrowLeft' && selectedReviewImages.length > 1) {
+        setCurrentImageIndex((prev) => 
+          prev === 0 ? selectedReviewImages.length - 1 : prev - 1
+        );
+      } else if (e.key === 'ArrowRight' && selectedReviewImages.length > 1) {
+        setCurrentImageIndex((prev) => 
+          prev === selectedReviewImages.length - 1 ? 0 : prev + 1
+        );
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isImageModalOpen, selectedReviewImages.length]);
+
   // Atualizar variação selecionada quando tamanho ou cor mudarem
   useEffect(() => {
     if (variants.length > 0 && selectedSize && selectedColor) {
@@ -233,11 +256,8 @@ export function ProductDetailPage() {
       return;
     }
 
-    // Se houver comentário, verificar se usuário comprou
-    if (reviewComment.trim() && !hasPurchased) {
-      toast.error('Você precisa comprar o produto antes de escrever um comentário. Você pode avaliar apenas com estrelas.');
-      return;
-    }
+    // Na página de detalhes do produto, apenas permitir avaliação com estrelas
+    // Comentário e fotos devem ser feitos na página de pedidos
 
     try {
       setSubmittingReview(true);
@@ -250,11 +270,12 @@ export function ProductDetailPage() {
         return;
       }
       
-      // Enviar avaliação (rating obrigatório, comment opcional)
+      // Enviar apenas avaliação com estrelas (sem comentário ou fotos)
       await reviewsAPI.create(
         productId, 
         reviewRating, 
-        hasPurchased ? reviewComment : undefined
+        undefined, // Sem comentário na página de detalhes
+        undefined  // Sem fotos na página de detalhes
       );
       
       // Reload reviews
@@ -265,14 +286,9 @@ export function ProductDetailPage() {
       setReviews(reviewsData);
       setAverageRating(ratingData);
       
-      setReviewComment('');
       setReviewRating(5);
       setIsReviewDialogOpen(false);
-      toast.success(
-        hasPurchased && reviewComment.trim()
-          ? 'Avaliação e comentário enviados com sucesso!'
-          : 'Avaliação enviada com sucesso!'
-      );
+      toast.success('Avaliação enviada com sucesso! Para adicionar comentário e fotos, acesse Meus Pedidos após receber o produto.');
     } catch (error: any) {
       console.error('Error submitting review:', error);
       toast.error(error.response?.data?.error || error.message || 'Erro ao enviar avaliação');
@@ -424,6 +440,25 @@ export function ProductDetailPage() {
     }
   };
 
+  const handleShare = () => {
+    if (!product) return;
+
+    // Gerar o link da página do produto
+    const productUrl = `${window.location.origin}/product/${product.id}`;
+    
+    // Criar mensagem para compartilhar
+    const message = `Olha que produto incrível que encontrei: ${product.name}\n\n${productUrl}`;
+    
+    // Abrir WhatsApp com o link
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+    
+    // Rastrear compartilhamento
+    AnalyticsEvents.share(product.id.toString(), 'whatsapp');
+    
+    toast.success('Link copiado! Abrindo WhatsApp...');
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-6 py-4 sm:py-8 lg:py-12">
       <Button
@@ -443,8 +478,8 @@ export function ProductDetailPage() {
             <div className="aspect-square w-full">
               <ImageWithFallback
                 src={
-                  (product as any).images && (product as any).images.length > 0
-                    ? (product as any).images[selectedImageIndex]?.url || product.image
+                  product.images && product.images.length > 0
+                    ? product.images[selectedImageIndex]?.url || product.image
                     : product.image
                 }
                 alt={product.name}
@@ -469,9 +504,9 @@ export function ProductDetailPage() {
           </div>
 
           {/* Thumbnail Gallery */}
-          {(product as any).images && (product as any).images.length > 1 && (
+          {product.images && product.images.length > 1 && (
             <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-4 gap-1.5 sm:gap-2">
-              {(product as any).images.slice(0, 8).map((img: any, index: number) => (
+              {product.images.slice(0, 8).map((img, index: number) => (
                 <button
                   key={img.id || index}
                   onClick={() => setSelectedImageIndex(index)}
@@ -498,7 +533,7 @@ export function ProductDetailPage() {
                 </button>
               ))}
               {/* Mostrar mais imagens se houver */}
-              {(product as any).images.length > 8 && (
+              {product.images && product.images.length > 8 && (
                 <button
                   onClick={() => setSelectedImageIndex(8)}
                   className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-all duration-200 ${
@@ -509,7 +544,7 @@ export function ProductDetailPage() {
                 >
                   <div className="h-full w-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
                     <span className="text-xs font-bold text-gray-600">
-                      +{(product as any).images.length - 8}
+                      +{product.images.length - 8}
                     </span>
                   </div>
                 </button>
@@ -704,7 +739,7 @@ export function ProductDetailPage() {
             )
           )}
 
-          {/* Add to Cart and Wishlist Buttons */}
+          {/* Add to Cart, Wishlist and Share Buttons */}
           <div className="flex gap-2 sm:gap-3 pt-2 sm:pt-3 border-t border-gray-200">
             <Button
               onClick={handleAddToCart}
@@ -734,19 +769,29 @@ export function ProductDetailPage() {
                 className={`h-4 w-4 sm:h-5 sm:w-5 transition-all ${isInWishlist ? 'fill-red-500 text-red-500 scale-110' : ''}`}
               />
             </Button>
+            <Button
+              onClick={handleShare}
+              size="lg"
+              variant="outline"
+              className="rounded-lg sm:rounded-xl border-2 border-green-500 px-4 sm:px-5 lg:px-6 py-4 sm:py-5 lg:py-6 text-green-500 hover:bg-green-50 transition-all duration-200 hover:shadow-md"
+              style={{ fontWeight: 700 }}
+              title="Compartilhar no WhatsApp"
+            >
+              <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Detailed Description Section */}
-      {(product as any).detailedDescription && (
+      {product?.detailedDescription && (
         <div className="mt-6 sm:mt-8 lg:mt-12 space-y-3 sm:space-y-4 border-t border-gray-200 pt-6 sm:pt-8 lg:pt-12">
           <h2 className="text-gray-900 text-lg sm:text-xl lg:text-[1.5rem] font-bold sm:font-extrabold lg:font-black" style={{ fontWeight: 700 }}>
             Descrição Detalhada
           </h2>
           <div className="prose prose-sm max-w-none">
             <p className="text-gray-700 leading-relaxed whitespace-pre-line text-sm sm:text-base" style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)', lineHeight: 1.7 }}>
-              {(product as any).detailedDescription}
+              {product.detailedDescription}
             </p>
           </div>
         </div>
@@ -781,7 +826,10 @@ export function ProductDetailPage() {
             )}
           </div>
           {isAuthenticated && (
-            <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
+            <Dialog 
+              open={isReviewDialogOpen} 
+              onOpenChange={setIsReviewDialogOpen}
+            >
               <DialogTrigger asChild>
                 <Button className="rounded-full bg-sky-500 text-white hover:bg-sky-600 text-xs sm:text-sm py-2 sm:py-2.5 px-3 sm:px-4">
                   <Star className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -791,6 +839,9 @@ export function ProductDetailPage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Avaliar {product.name}</DialogTitle>
+                  <DialogDescription>
+                    Compartilhe sua opinião sobre este produto
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
@@ -818,37 +869,19 @@ export function ProductDetailPage() {
                     </div>
                   </div>
                   
-                  {hasPurchased ? (
-                    <div>
-                      <Label htmlFor="review-comment" className="mb-2 block">
-                        Comentário (Opcional)
-                      </Label>
-                      <p className="mb-2 text-xs text-green-600">
-                        ✓ Você comprou este produto e pode escrever um comentário
-                      </p>
-                      <Textarea
-                        id="review-comment"
-                        value={reviewComment}
-                        onChange={(e) => setReviewComment(e.target.value)}
-                        placeholder="Compartilhe sua opinião sobre este produto..."
-                        rows={4}
-                        className="text-sm sm:text-base"
-                      />
-                    </div>
-                  ) : (
-                    <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 sm:p-4">
-                      <p className="text-xs sm:text-sm text-amber-700">
-                        <span className="font-semibold">Apenas quem comprou pode comentar:</span> Você pode avaliar este produto com estrelas, mas para escrever um comentário é necessário ter comprado o produto.
-                      </p>
-                    </div>
-                  )}
+                  {/* Mensagem informativa sobre avaliação avançada */}
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 sm:p-4">
+                    <p className="text-xs sm:text-sm text-blue-700">
+                      <span className="font-semibold">💡 Avaliação Avançada:</span> Para fazer uma avaliação completa com comentário e fotos, acesse a página de <strong>Meus Pedidos</strong> após receber o produto entregue.
+                    </p>
+                  </div>
                   
                   <Button
                     onClick={handleSubmitReview}
-                    disabled={submittingReview || checkingPurchase}
+                    disabled={submittingReview}
                     className="w-full bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white"
                   >
-                    {submittingReview ? 'Enviando...' : checkingPurchase ? 'Verificando...' : 'Enviar Avaliação'}
+                    {submittingReview ? 'Enviando...' : 'Enviar Avaliação'}
                   </Button>
                 </div>
               </DialogContent>
@@ -867,18 +900,57 @@ export function ProductDetailPage() {
           </div>
         ) : (
           <div className="space-y-3 sm:space-y-4">
-            {reviews.map((review) => (
+            {reviews.map((review) => {
+              const isOwner = user && review.userId === user.id;
+              
+              return (
               <div key={review.id} className="rounded-lg sm:rounded-xl lg:rounded-2xl bg-white p-4 sm:p-5 lg:p-6 shadow-md border border-gray-200 transition-colors">
                 <div className="mb-2 sm:mb-3 flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-gray-900 text-sm sm:text-base">{review.user.name}</p>
-                    <p className="text-xs sm:text-sm text-gray-500">
-                      {new Date(review.createdAt).toLocaleDateString('pt-BR', {
-                        day: '2-digit',
-                        month: 'long',
-                        year: 'numeric',
-                      })}
-                    </p>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm sm:text-base">{review.user.name}</p>
+                        <p className="text-xs sm:text-sm text-gray-500">
+                          {new Date(review.createdAt).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: 'long',
+                            year: 'numeric',
+                          })}
+                        </p>
+                      </div>
+                      {isOwner && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            if (window.confirm('Tem certeza que deseja deletar esta avaliação? Você poderá criar uma nova avaliação depois.')) {
+                              try {
+                                await reviewsAPI.delete(review.id);
+                                toast.success('Avaliação deletada com sucesso!');
+                                
+                                // Recarregar avaliações
+                                const productId = Number(params?.id);
+                                if (productId && !isNaN(productId) && productId > 0) {
+                                  const [reviewsData, ratingData] = await Promise.all([
+                                    reviewsAPI.getByProduct(productId),
+                                    reviewsAPI.getAverageRating(productId),
+                                  ]);
+                                  setReviews(reviewsData);
+                                  setAverageRating(ratingData);
+                                }
+                              } catch (error: any) {
+                                console.error('Error deleting review:', error);
+                                toast.error(error.response?.data?.error || 'Erro ao deletar avaliação');
+                              }
+                            }
+                          }}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          title="Deletar avaliação"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
                     {[...Array(5)].map((_, i) => (
@@ -891,12 +963,185 @@ export function ProductDetailPage() {
                     ))}
                   </div>
                 </div>
-                <p className="text-gray-700 text-sm sm:text-base leading-relaxed">{review.comment}</p>
+                {review.comment && (
+                  <p className="text-gray-700 text-sm sm:text-base leading-relaxed mb-3">{review.comment}</p>
+                )}
+                
+                {/* Exibir imagens da avaliação */}
+                {review.images && review.images.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
+                    {review.images.map((img, imgIndex) => {
+                      // Verificar se a URL da imagem é válida
+                      const imageUrl = img.imageUrl || '';
+                      const isValidBase64 = imageUrl.startsWith('data:image') || imageUrl.startsWith('http');
+                      
+                      return (
+                        <div key={img.id} className="relative group">
+                          {isValidBase64 ? (
+                            <img
+                              src={imageUrl}
+                              alt={`Foto da avaliação de ${review.user.name}`}
+                              className="w-full h-32 sm:h-40 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity bg-gray-100"
+                              style={{
+                                minHeight: '128px',
+                                display: 'block',
+                              }}
+                              onError={(e) => {
+                                console.error('❌ Erro ao carregar imagem no card:', {
+                                  imageId: img.id,
+                                  urlLength: imageUrl.length,
+                                  urlStart: imageUrl.substring(0, 100),
+                                  urlEnd: imageUrl.substring(imageUrl.length - 50),
+                                  isBase64: imageUrl.startsWith('data:image'),
+                                });
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                // Mostrar placeholder de erro
+                                const placeholder = document.createElement('div');
+                                placeholder.className = 'w-full h-32 sm:h-40 bg-red-100 rounded-lg border border-red-300 flex items-center justify-center';
+                                placeholder.innerHTML = '<p class="text-xs text-red-500">Erro ao carregar</p>';
+                                target.parentElement?.appendChild(placeholder);
+                              }}
+                              onLoad={(e) => {
+                                console.log('✅ Imagem carregada no card:', {
+                                  imageId: img.id,
+                                  naturalWidth: (e.target as HTMLImageElement).naturalWidth,
+                                  naturalHeight: (e.target as HTMLImageElement).naturalHeight,
+                                });
+                                (e.target as HTMLImageElement).style.display = 'block';
+                              }}
+                              onClick={() => {
+                                setSelectedReviewImages(review.images || []);
+                                setCurrentImageIndex(imgIndex);
+                                setIsImageModalOpen(true);
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-32 sm:h-40 bg-gray-200 rounded-lg border border-gray-300 flex items-center justify-center">
+                              <p className="text-xs text-gray-500">Imagem inválida</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>
+
+      {/* Modal para exibir imagens das avaliações em tamanho real */}
+      {isImageModalOpen && selectedReviewImages.length > 0 && (
+        <div 
+          className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center"
+          style={{
+            padding: '1rem',
+            overflow: 'auto',
+          }}
+          onClick={() => setIsImageModalOpen(false)}
+        >
+          {/* Botão fechar */}
+          <button
+            onClick={() => setIsImageModalOpen(false)}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10"
+            aria-label="Fechar"
+          >
+            <X className="h-8 w-8" />
+          </button>
+
+          {/* Botão anterior */}
+          {selectedReviewImages.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentImageIndex((prev) => 
+                  prev === 0 ? selectedReviewImages.length - 1 : prev - 1
+                );
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-50 rounded-full p-2"
+              aria-label="Imagem anterior"
+            >
+              <ChevronLeft className="h-8 w-8" />
+            </button>
+          )}
+
+          {/* Imagem atual */}
+          <div 
+            className="w-full h-full flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              padding: '2rem',
+              boxSizing: 'border-box',
+              minHeight: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <img
+              src={selectedReviewImages[currentImageIndex].imageUrl}
+              alt={`Foto ${currentImageIndex + 1} de ${selectedReviewImages.length}`}
+              className="rounded-lg"
+              style={{
+                maxWidth: 'min(90vw, 1200px)',
+                maxHeight: 'min(90vh, 800px)',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain',
+                imageRendering: 'auto',
+                display: 'block',
+              }}
+              onError={(e) => {
+                console.error('❌ Erro ao carregar imagem no modal:', {
+                  imageUrl: selectedReviewImages[currentImageIndex]?.imageUrl?.substring(0, 100),
+                  imageUrlLength: selectedReviewImages[currentImageIndex]?.imageUrl?.length,
+                  imageUrlEnd: selectedReviewImages[currentImageIndex]?.imageUrl?.substring(
+                    (selectedReviewImages[currentImageIndex]?.imageUrl?.length || 0) - 50
+                  ),
+                });
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement;
+                console.log('✅ Imagem carregada no modal:', {
+                  naturalWidth: img.naturalWidth,
+                  naturalHeight: img.naturalHeight,
+                  displayWidth: img.offsetWidth,
+                  displayHeight: img.offsetHeight,
+                });
+                img.style.display = 'block';
+              }}
+              loading="eager"
+            />
+          </div>
+
+          {/* Botão próximo */}
+          {selectedReviewImages.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentImageIndex((prev) => 
+                  prev === selectedReviewImages.length - 1 ? 0 : prev + 1
+                );
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-50 rounded-full p-2"
+              aria-label="Próxima imagem"
+            >
+              <ChevronRight className="h-8 w-8" />
+            </button>
+          )}
+
+          {/* Indicador de posição */}
+          {selectedReviewImages.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white bg-black bg-opacity-50 px-4 py-2 rounded-full text-sm z-10">
+              {currentImageIndex + 1} / {selectedReviewImages.length}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

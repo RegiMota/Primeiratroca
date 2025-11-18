@@ -29,7 +29,7 @@ export function CheckoutPendingPage() {
   const verifyPreference = async (preferenceId: string) => {
     try {
       const payments = await paymentsAPI.getAll();
-      const payment = payments.find((p: any) => p.gatewayPaymentId === preferenceId);
+      const payment = payments.find((p: { gatewayPaymentId?: string }) => p.gatewayPaymentId === preferenceId);
       
       if (payment && payment.gatewayPaymentId) {
         setPaymentId(payment.gatewayPaymentId);
@@ -46,7 +46,7 @@ export function CheckoutPendingPage() {
   const verifyPayment = async (mpPaymentId: string) => {
     try {
       const payments = await paymentsAPI.getAll();
-      const payment = payments.find((p: any) => p.gatewayPaymentId === mpPaymentId);
+      const payment = payments.find((p: { gatewayPaymentId?: string; status?: string }) => p.gatewayPaymentId === mpPaymentId);
       
       if (payment) {
         if (payment.status === 'approved') {

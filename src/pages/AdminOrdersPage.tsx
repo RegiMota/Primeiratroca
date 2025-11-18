@@ -6,7 +6,6 @@ import { Package, Clock, Truck, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
-import { ErrorBoundary } from '../components/ErrorBoundary';
 import {
   Select,
   SelectContent,
@@ -21,8 +20,9 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { toast } from 'sonner';
+import { OrderItem } from '../types';
 
-const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
+const statusConfig: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string; label: string }> = {
   pending: {
     icon: Clock,
     color: 'bg-yellow-100 text-yellow-800 border-yellow-300',
@@ -280,7 +280,7 @@ export function AdminOrdersPage() {
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-4">Itens do Pedido</p>
                 <div className="space-y-4">
-                  {selectedOrder.items?.map((item: any, index: number) => {
+                  {selectedOrder.items?.map((item: OrderItem, index: number) => {
                     const productPrice = typeof item.product.price === 'number' 
                       ? item.product.price 
                       : Number(item.product.price || item.price || 0);

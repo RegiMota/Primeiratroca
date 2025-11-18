@@ -18,6 +18,13 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Switch } from '../components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { toast } from 'sonner';
 import { useSearch } from '../contexts/SearchContext';
 
@@ -61,6 +68,8 @@ export function AdminCategoriesPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { searchQuery } = useSearch();
+  const [selectedCategoryForMenu, setSelectedCategoryForMenu] = useState<Category | null>(null);
+  const [activeTab, setActiveTab] = useState('categories');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -213,7 +222,7 @@ export function AdminCategoriesPage() {
         <p className="text-gray-600">Adicione, edite ou remova categorias de produtos e configure a navbar</p>
       </div>
 
-      <Tabs defaultValue="categories" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="categories">Categorias</TabsTrigger>
           <TabsTrigger value="menus">
@@ -373,8 +382,22 @@ export function AdminCategoriesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => {
+                            setSelectedCategoryForMenu(category);
+                            setActiveTab('menus');
+                            toast.info('Selecione um menu e clique em "Adicionar Submenu" para criar um item com esta categoria');
+                          }}
+                          className="text-green-500 hover:bg-green-50"
+                          title="Criar menu com esta categoria"
+                        >
+                          <MenuIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleEdit(category)}
                           className="text-sky-500 hover:bg-sky-50"
+                          title="Editar categoria"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -383,6 +406,7 @@ export function AdminCategoriesPage() {
                           size="icon"
                           onClick={() => handleDelete(category.id)}
                           className="text-red-500 hover:bg-red-50"
+                          title="Deletar categoria"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -398,7 +422,11 @@ export function AdminCategoriesPage() {
         </TabsContent>
 
         <TabsContent value="menus">
-          <AdminMenusSection />
+          <AdminMenusSection 
+            categories={categories}
+            selectedCategoryForMenu={selectedCategoryForMenu}
+            onCategorySelectedForMenu={setSelectedCategoryForMenu}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -406,7 +434,15 @@ export function AdminCategoriesPage() {
 }
 
 // Componente para gerenciar menus
-function AdminMenusSection() {
+function AdminMenusSection({ 
+  categories,
+  selectedCategoryForMenu,
+  onCategorySelectedForMenu
+}: { 
+  categories: Category[];
+  selectedCategoryForMenu: Category | null;
+  onCategorySelectedForMenu: (category: Category | null) => void;
+}) {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMenuDialogOpen, setIsMenuDialogOpen] = useState(false);
@@ -428,6 +464,11 @@ function AdminMenusSection() {
     href: '',
     order: 0,
     isActive: true,
+    // Novos campos para filtros
+    selectedCategory: '',
+    gender: 'all',
+    featured: false,
+    newProducts: false,
   });
 
   useEffect(() => {
@@ -513,12 +554,38 @@ function AdminMenusSection() {
 
   const handleItemEdit = (item: MenuItem) => {
     setEditingMenuItem(item);
-    setItemFormData({
-      label: item.label,
-      href: item.href,
-      order: item.order,
-      isActive: item.isActive,
-    });
+    
+    // Extrair informações do href
+    try {
+      const url = new URL(item.href, 'http://localhost');
+      const categorySlug = url.searchParams.get('category') || '';
+      const gender = url.searchParams.get('gender') || 'all';
+      const featured = url.searchParams.get('featured') === 'true';
+      const newProducts = url.searchParams.get('new') === 'true';
+      
+      setItemFormData({
+        label: item.label,
+        href: item.href,
+        order: item.order,
+        isActive: item.isActive,
+        selectedCategory: categorySlug,
+        gender: gender || 'all',
+        featured: featured,
+        newProducts: newProducts,
+      });
+    } catch (error) {
+      // Se não conseguir parsear a URL, usar valores padrão
+      setItemFormData({
+        label: item.label,
+        href: item.href,
+        order: item.order,
+        isActive: item.isActive,
+        selectedCategory: '',
+        gender: 'all',
+        featured: false,
+        newProducts: false,
+      });
+    }
     setIsItemDialogOpen(true);
   };
 
@@ -572,6 +639,10 @@ function AdminMenusSection() {
         href: '',
         order: 0,
         isActive: true,
+        selectedCategory: '',
+        gender: 'all',
+        featured: false,
+        newProducts: false,
       });
     } catch (error: any) {
       console.error('Error saving menu item:', error);
@@ -592,18 +663,76 @@ function AdminMenusSection() {
     setIsMenuDialogOpen(true);
   };
 
-  const openAddItemDialog = (menuId: number) => {
+  const openAddItemDialog = (menuId: number, category?: Category) => {
     setSelectedMenuId(menuId);
     setEditingMenuItem(null);
     const menu = menus.find((m) => m.id === menuId);
+    
+    // Usar a categoria selecionada ou a categoria passada como parâmetro
+    const categoryToUse = selectedCategoryForMenu || category;
+    
+    // Se uma categoria foi passada, pré-preencher os dados
+    const initialHref = categoryToUse 
+      ? `/shop?category=${categoryToUse.slug}`
+      : '';
+    
     setItemFormData({
-      label: '',
-      href: '',
+      label: categoryToUse?.name || '',
+      href: initialHref,
       order: menu?.items.length || 0,
       isActive: true,
+      selectedCategory: categoryToUse?.slug || '',
+      gender: 'all',
+      featured: false,
+      newProducts: false,
     });
     setIsItemDialogOpen(true);
+    
+    // Limpar a categoria selecionada após usar
+    if (selectedCategoryForMenu) {
+      onCategorySelectedForMenu(null);
+    }
   };
+
+  // Função para gerar link automaticamente baseado nos filtros
+  const generateLink = (categorySlug: string, gender: string, featured: boolean, newProducts: boolean) => {
+    const params = new URLSearchParams();
+    
+    if (categorySlug) {
+      params.append('category', categorySlug);
+    }
+    
+    if (gender && gender !== 'all') {
+      params.append('gender', gender);
+    }
+    
+    if (featured) {
+      params.append('featured', 'true');
+    }
+    
+    if (newProducts) {
+      params.append('new', 'true');
+    }
+    
+    return `/shop?${params.toString()}`;
+  };
+
+  // Atualizar link quando filtros mudarem (mas não quando o href já foi editado manualmente)
+  useEffect(() => {
+    // Só gerar automaticamente se não estiver editando um item existente ou se o href ainda não foi definido
+    if (!editingMenuItem && itemFormData.selectedCategory) {
+      const newLink = generateLink(
+        itemFormData.selectedCategory,
+        itemFormData.gender,
+        itemFormData.featured,
+        itemFormData.newProducts
+      );
+      // Só atualizar se o link gerado for diferente do atual (para evitar loops)
+      if (newLink !== itemFormData.href) {
+        setItemFormData(prev => ({ ...prev, href: newLink }));
+      }
+    }
+  }, [itemFormData.selectedCategory, itemFormData.gender, itemFormData.featured, itemFormData.newProducts]);
 
   return (
     <div className="space-y-6">
@@ -836,7 +965,71 @@ function AdminMenusSection() {
             </div>
 
             <div>
-              <Label htmlFor="item-href">Link</Label>
+              <Label htmlFor="item-category">Categoria</Label>
+              <Select
+                value={itemFormData.selectedCategory}
+                onValueChange={(value) => {
+                  const category = categories.find(c => c.slug === value);
+                  setItemFormData(prev => ({
+                    ...prev,
+                    selectedCategory: value,
+                    label: category?.name || prev.label,
+                  }));
+                }}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.slug}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-gray-500">
+                Selecione uma categoria para gerar o link automaticamente
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="item-gender">Gênero (opcional)</Label>
+              <Select
+                value={itemFormData.gender}
+                onValueChange={(value) => setItemFormData(prev => ({ ...prev, gender: value }))}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Selecione um gênero" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="girls">Meninas</SelectItem>
+                  <SelectItem value="boys">Meninos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Label htmlFor="item-featured">Produtos em Destaque</Label>
+              <Switch
+                id="item-featured"
+                checked={itemFormData.featured}
+                onCheckedChange={(checked) => setItemFormData(prev => ({ ...prev, featured: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Label htmlFor="item-new">Novidades</Label>
+              <Switch
+                id="item-new"
+                checked={itemFormData.newProducts}
+                onCheckedChange={(checked) => setItemFormData(prev => ({ ...prev, newProducts: checked }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="item-href">Link (gerado automaticamente)</Label>
               <Input
                 id="item-href"
                 value={itemFormData.href}
@@ -845,6 +1038,9 @@ function AdminMenusSection() {
                 className="mt-2"
                 placeholder="Ex: /shop?category=conjuntos"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                O link é gerado automaticamente baseado nos filtros acima. Você pode editá-lo manualmente se necessário.
+              </p>
             </div>
 
             <div>

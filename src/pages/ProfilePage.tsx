@@ -26,8 +26,17 @@ import {
   ShoppingBag,
   Cake,
   CreditCard,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../components/ui/dialog';
 
 export function ProfilePage() {
   const { user, isAuthenticated, updateUser, loading: authLoading } = useAuth();
@@ -40,6 +49,13 @@ export function ProfilePage() {
     ticketsCount: 0,
   });
   const [isEditing, setIsEditing] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -64,13 +80,25 @@ export function ProfilePage() {
         
         // Carregar dados do usuário
         const userData = await authAPI.getCurrentUser();
+        
+        // Formatar CPF se existir
+        let formattedCpf = '';
+        if (userData.user.cpf) {
+          const cpfDigits = userData.user.cpf.replace(/\D/g, '');
+          if (cpfDigits.length === 11) {
+            formattedCpf = cpfDigits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+          } else {
+            formattedCpf = userData.user.cpf;
+          }
+        }
+        
         setFormData({
           name: userData.user.name,
           email: userData.user.email,
           birthDate: userData.user.birthDate 
             ? new Date(userData.user.birthDate).toISOString().split('T')[0]
             : '',
-          cpf: userData.user.cpf || '',
+          cpf: formattedCpf,
         });
 
         // Carregar estatísticas
@@ -164,6 +192,49 @@ export function ProfilePage() {
       return `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9, 11)}`;
     }
     return value.slice(0, 14); // Limitar a 14 caracteres (11 dígitos + 3 formatação)
+  };
+
+  const handleChangePassword = async () => {
+    // Validações
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      toast.error('Preencha todos os campos');
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast.error('A nova senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    if (passwordData.currentPassword === passwordData.newPassword) {
+      toast.error('A nova senha deve ser diferente da senha atual');
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      await authAPI.changePassword(passwordData.currentPassword, passwordData.newPassword);
+      toast.success('Senha alterada com sucesso!');
+      setIsChangePasswordOpen(false);
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      toast.error('Erro ao alterar senha', {
+        description: error.response?.data?.error || 'Verifique a senha atual e tente novamente.',
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   if (loading) {
@@ -369,10 +440,13 @@ export function ProfilePage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">CPF</p>
                           <p className="text-base text-gray-900 dark:text-gray-100">
-                            {user.cpf.length === 11 
-                              ? user.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-                              : user.cpf
-                            }
+                            {(() => {
+                              const cpfDigits = user.cpf.replace(/\D/g, '');
+                              if (cpfDigits.length === 11) {
+                                return cpfDigits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                              }
+                              return user.cpf;
+                            })()}
                           </p>
                         </div>
                       </div>
@@ -420,13 +494,90 @@ export function ProfilePage() {
                     {user.isTwoFactorEnabled ? 'Ativo' : 'Inativo'}
                   </Badge>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() => setLocation('/login')}
-                  className="w-full"
-                >
-                  Alterar Senha
-                </Button>
+                <Dialog open={isChangePasswordOpen} onOpenChange={setIsChangePasswordOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Lock className="mr-2 h-4 w-4" />
+                      Alterar Senha
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Alterar Senha</DialogTitle>
+                      <DialogDescription>
+                        Digite sua senha atual e a nova senha desejada.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div>
+                        <Label htmlFor="currentPassword">Senha Atual</Label>
+                        <Input
+                          id="currentPassword"
+                          type="password"
+                          value={passwordData.currentPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                          className="mt-2"
+                          placeholder="Digite sua senha atual"
+                          disabled={isChangingPassword}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="newPassword">Nova Senha</Label>
+                        <Input
+                          id="newPassword"
+                          type="password"
+                          value={passwordData.newPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                          className="mt-2"
+                          placeholder="Digite a nova senha"
+                          disabled={isChangingPassword}
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Mínimo de 6 caracteres
+                        </p>
+                      </div>
+                      <div>
+                        <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
+                        <Input
+                          id="confirmPassword"
+                          type="password"
+                          value={passwordData.confirmPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                          className="mt-2"
+                          placeholder="Confirme a nova senha"
+                          disabled={isChangingPassword}
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          onClick={handleChangePassword}
+                          disabled={isChangingPassword}
+                          className="flex-1"
+                        >
+                          {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setIsChangePasswordOpen(false);
+                            setPasswordData({
+                              currentPassword: '',
+                              newPassword: '',
+                              confirmPassword: '',
+                            });
+                          }}
+                          disabled={isChangingPassword}
+                          className="flex-1"
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </CardContent>
           </Card>

@@ -11,26 +11,71 @@ import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { CouponInput } from '../components/CouponInput';
 import { PaymentMethodSelector, PaymentMethod } from '../components/PaymentMethodSelector';
 import { toast } from 'sonner';
-import { MapPin, Plus, Check, Search } from 'lucide-react';
+import { MapPin, Plus, Check, Search, QrCode, Copy, Loader2 } from 'lucide-react';
 import { AnalyticsEvents } from '../lib/analytics';
+import { UserAddress, ShippingOption, ApiError, CardError, AppliedCoupon, PaymentData } from '../types';
+import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+
+// Type guard para verificar se é um erro da API
+function isApiError(error: unknown): error is ApiError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    ('message' in error || 'response' in error)
+  );
+}
+
+// Helper para extrair mensagem de erro
+function getErrorMessage(error: unknown): string {
+  if (isApiError(error)) {
+    if (error.response?.data?.error) {
+      return error.response.data.error;
+    }
+    if (error.response?.data?.message) {
+      return error.response.data.message;
+    }
+    if (error.message) {
+      return error.message;
+    }
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Erro desconhecido';
+}
 
 export function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
   const { isAuthenticated, user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number; finalTotal: number } | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
-  const [installments, setInstallments] = useState(1);
+  const [installments, setInstallments] = useState<number | null>(null);
+  const [pixQrCode, setPixQrCode] = useState<string | null>(null);
+  const [pixCode, setPixCode] = useState<string | null>(null);
+  const [pixExpiresAt, setPixExpiresAt] = useState<Date | null>(null);
+  const [pixPaymentId, setPixPaymentId] = useState<number | null>(null);
+  const [checkingPixStatus, setCheckingPixStatus] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
 
   // Estados para endereços e frete (v2.0)
-  const [userAddresses, setUserAddresses] = useState<any[]>([]);
+  const [userAddresses, setUserAddresses] = useState<UserAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
-  const [shippingOptions, setShippingOptions] = useState<any[]>([]);
-  const [selectedShipping, setSelectedShipping] = useState<any | null>(null);
+  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+  const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
   const [loadingShipping, setLoadingShipping] = useState(false);
   const [isNewAddress, setIsNewAddress] = useState(false);
   const [loadingCEP, setLoadingCEP] = useState(false);
+
+  // Opção de retirada na loja (sempre disponível)
+  const storePickupOption: ShippingOption = {
+    service: 'STORE_PICKUP',
+    name: 'Retirar na Loja - Grátis',
+    price: 0,
+    estimatedDays: 0,
+    carrier: 'loja',
+  };
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -44,6 +89,8 @@ export function CheckoutPage() {
     cardNumber: '',
     cardExpiry: '',
     cardCvc: '',
+    cardHolderName: '', // Nome do portador do cartão
+    cardHolderCpf: '', // CPF do portador do cartão
   });
 
   // Carregar endereços do usuário (v2.0)
@@ -58,7 +105,9 @@ export function CheckoutPage() {
       return;
     }
 
-    if (items.length === 0) {
+    // Não redirecionar se houver um pagamento PIX pendente
+    const savedPixPaymentId = localStorage.getItem('pixPaymentId');
+    if (items.length === 0 && !savedPixPaymentId) {
       setLocation('/cart');
       return;
     }
@@ -70,7 +119,7 @@ export function CheckoutPage() {
         setUserAddresses(response.addresses || []);
         
         // Selecionar endereço padrão se existir
-        const defaultAddress = response.addresses?.find((addr: any) => addr.isDefault);
+        const defaultAddress = response.addresses?.find((addr: UserAddress) => addr.isDefault);
         if (defaultAddress) {
           setSelectedAddressId(defaultAddress.id);
           setIsNewAddress(false);
@@ -126,172 +175,413 @@ export function CheckoutPage() {
     }
   }, [isAuthenticated, authLoading, items.length, setLocation, items, totalPrice]);
 
-  if (!isAuthenticated || items.length === 0) {
-    return null;
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setFormData({
-      ...formData,
-      [e.target.name]: value,
-    });
-
-    // Formatar CEP automaticamente
-    if (e.target.name === 'zipCode') {
-      const zipCode = value.replace(/\D/g, '').slice(0, 8);
-      const formattedZipCode = zipCode.replace(/(\d{5})(\d{3})/, '$1-$2');
-      setFormData(prev => ({ ...prev, zipCode: formattedZipCode }));
-      
-      // Calcular frete quando CEP estiver completo (v2.0)
-      if (zipCode.length === 8) {
-        calculateShipping(formattedZipCode);
-      }
+  // Recuperar QR code PIX após recarregar página
+  useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      console.log('⏳ Aguardando autenticação...');
+      return;
     }
-  };
-
-  // Buscar endereço por CEP usando ViaCEP (v2.0)
-  const searchCEP = async (cep: string) => {
-    const cepDigits = cep.replace(/\D/g, '');
     
-    if (cepDigits.length !== 8) {
-      toast.error('CEP inválido', {
-        description: 'O CEP deve conter 8 dígitos',
-      });
+    // Não redirecionar se houver um pagamento PIX pendente
+    const savedPixPaymentId = localStorage.getItem('pixPaymentId');
+    if (savedPixPaymentId && items.length === 0) {
+      console.log('📦 Pagamento PIX pendente encontrado, mantendo na página de checkout');
+      // Não redirecionar para /cart se houver pagamento PIX pendente
+    } else if (items.length === 0 && !savedPixPaymentId) {
+      console.log('🛒 Carrinho vazio, redirecionando para /cart');
+      setLocation('/cart');
+      return;
+    }
+    
+    const recoverPixPayment = async () => {
+      try {
+        const savedPixPaymentId = localStorage.getItem('pixPaymentId');
+        console.log('🔍 Tentando recuperar pagamento PIX. ID salvo:', savedPixPaymentId);
+        
+        if (!savedPixPaymentId) {
+          console.log('❌ Nenhum pagamento PIX salvo encontrado');
+          return;
+        }
+        
+        const paymentId = parseInt(savedPixPaymentId, 10);
+        if (isNaN(paymentId)) {
+          console.error('❌ ID de pagamento inválido:', savedPixPaymentId);
+          localStorage.removeItem('pixPaymentId');
+          return;
+        }
+        
+        console.log('📡 Buscando pagamento do backend. ID:', paymentId);
+        // Buscar pagamento do backend
+        const paymentData = await paymentsAPI.getById(paymentId);
+        console.log('📦 Dados do pagamento recebidos:', {
+          id: paymentData.id,
+          method: paymentData.paymentMethod,
+          status: paymentData.status,
+          hasQrCode: !!paymentData.qrCodeBase64,
+          hasPixCode: !!paymentData.pixCode,
+          expiresAt: paymentData.pixExpiresAt,
+        });
+        
+        // Verificar se é um pagamento PIX pendente
+        if (paymentData.paymentMethod !== 'pix') {
+          console.log('❌ Não é um pagamento PIX. Método:', paymentData.paymentMethod);
+          localStorage.removeItem('pixPaymentId');
+          return;
+        }
+        
+        if (paymentData.status !== 'pending') {
+          console.log('❌ Pagamento não está pendente. Status:', paymentData.status);
+          localStorage.removeItem('pixPaymentId');
+          return;
+        }
+        
+        // Verificar se não expirou
+        if (paymentData.pixExpiresAt) {
+          const expirationDate = new Date(paymentData.pixExpiresAt);
+          const now = new Date();
+          if (now > expirationDate) {
+            console.log('⏰ QR code expirado');
+            localStorage.removeItem('pixPaymentId');
+            toast.warning('O QR code PIX expirou. Por favor, inicie uma nova compra.');
+            return;
+          }
+        }
+        
+        // Se encontrou QR code, redirecionar para página de pagamento
+        if (paymentData.qrCodeBase64 || paymentData.pixCode) {
+          console.log('✅ QR code encontrado, redirecionando para página de pagamento...');
+          toast.info('Redirecionando para página de pagamento...');
+          setTimeout(() => {
+            setLocation(`/payment/${paymentId}`);
+          }, 500);
+        } else {
+          console.log('❌ QR code não encontrado nos dados do pagamento');
+        }
+      } catch (error) {
+        console.error('❌ Erro ao recuperar pagamento PIX:', error);
+        // Se houver erro, limpar localStorage
+        localStorage.removeItem('pixPaymentId');
+      }
+    };
+    
+    recoverPixPayment();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, isAuthenticated]);
+
+  // Função para calcular tempo restante
+  useEffect(() => {
+    if (!pixExpiresAt) {
+      setTimeRemaining('');
       return;
     }
 
-    setLoadingCEP(true);
+    const updateTimeRemaining = () => {
+      const now = new Date();
+      const expires = new Date(pixExpiresAt);
+      const diff = expires.getTime() - now.getTime();
 
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`);
-      const data = await response.json();
-
-      if (data.erro) {
-        toast.error('CEP não encontrado', {
-          description: 'Por favor, verifique o CEP e tente novamente.',
-        });
+      if (diff <= 0) {
+        setTimeRemaining('Expirado');
         return;
       }
 
-      // Preencher campos automaticamente
-      setFormData(prev => ({
-        ...prev,
-        address: data.logradouro || '',
-        neighborhood: data.bairro || '',
-        city: data.localidade || '',
-        state: data.uf || '',
-        zipCode: cepDigits.replace(/(\d{5})(\d{3})/, '$1-$2'),
-      }));
+      const totalMinutes = Math.floor(diff / 60000);
+      const minutes = totalMinutes;
+      const seconds = Math.floor((diff % 60000) / 1000);
 
-      toast.success('Endereço encontrado!', {
-        description: 'Os campos foram preenchidos automaticamente.',
-      });
+      if (minutes > 0) {
+        setTimeRemaining(`${minutes} min ${seconds} seg`);
+      } else if (seconds > 0) {
+        setTimeRemaining(`${seconds} seg`);
+      } else {
+        setTimeRemaining('Expirado');
+      }
+    };
 
-      // Calcular frete automaticamente após buscar CEP
-      calculateShipping(cepDigits.replace(/(\d{5})(\d{3})/, '$1-$2'));
-    } catch (error) {
-      console.error('Error searching CEP:', error);
-      toast.error('Erro ao buscar CEP', {
-        description: 'Tente novamente mais tarde.',
-      });
-    } finally {
-      setLoadingCEP(false);
-    }
+    // Atualizar imediatamente
+    updateTimeRemaining();
+    
+    // Atualizar a cada segundo
+    const interval = setInterval(updateTimeRemaining, 1000);
+
+    return () => clearInterval(interval);
+  }, [pixExpiresAt]);
+
+  // Função para verificar status do pagamento PIX
+  const startPixStatusCheck = (paymentId: number) => {
+    setCheckingPixStatus(true);
+    
+    const checkInterval = setInterval(async () => {
+      try {
+        const payment = await paymentsAPI.getById(paymentId);
+        
+        if (payment.status === 'approved') {
+          clearInterval(checkInterval);
+          setCheckingPixStatus(false);
+          // Limpar localStorage quando pagamento for aprovado
+          localStorage.removeItem('pixPaymentId');
+          toast.success('Pagamento PIX confirmado!');
+          clearCart();
+          setTimeout(() => {
+            setLocation('/checkout/success');
+          }, 2000);
+        } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
+          clearInterval(checkInterval);
+          setCheckingPixStatus(false);
+          toast.error('Pagamento PIX não foi aprovado');
+        }
+      } catch (error) {
+        console.error('Error checking PIX status:', error);
+      }
+    }, 5000); // Verificar a cada 5 segundos
+
+    // Parar após 5 minutos (tempo máximo de expiração do PIX)
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      setCheckingPixStatus(false);
+    }, 5 * 60 * 1000); // 5 minutos em milissegundos
   };
 
-  // Calcular opções de frete (v2.0)
-  const calculateShipping = async (destinationZipCode: string) => {
-    if (!destinationZipCode || destinationZipCode.replace(/\D/g, '').length !== 8) {
+  // Função para verificar status do pagamento com cartão
+  const startCardStatusCheck = (paymentId: number) => {
+    const checkInterval = setInterval(async () => {
+      try {
+        const payment = await paymentsAPI.getById(paymentId);
+        
+        if (payment.status === 'approved') {
+          clearInterval(checkInterval);
+          toast.success('Pagamento aprovado!');
+          clearCart();
+          setTimeout(() => {
+            setLocation('/checkout/success');
+          }, 2000);
+        } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
+          clearInterval(checkInterval);
+          toast.error('Pagamento não foi aprovado');
+        }
+      } catch (error) {
+        console.error('Error checking card payment status:', error);
+      }
+    }, 5000); // Verificar a cada 5 segundos
+
+    // Parar após 10 minutos
+    setTimeout(() => {
+      clearInterval(checkInterval);
+    }, 10 * 60 * 1000);
+  };
+
+  // Função para calcular frete (v2.0)
+  const calculateShipping = async (zipCode: string) => {
+    if (!zipCode || zipCode.replace(/\D/g, '').length !== 8) {
       return;
     }
 
     setLoadingShipping(true);
-
     try {
-      // Calcular peso total (simulado: 200g por item)
-      const totalWeight = items.reduce((sum, item) => sum + item.quantity * 200, 0);
-
-      // Calcular dimensões (simulado)
-      const dimensions = {
-        height: 5, // cm
-        width: 20, // cm
-        length: 30, // cm
-      };
-
-      // CEP de origem (configurável - pode vir de settings)
-      const originZipCode = '01310100'; // Exemplo: São Paulo (sem hífen)
-
-      const response = await shippingAPI.calculate({
-        originZipCode,
-        destinationZipCode: destinationZipCode.replace(/\D/g, ''),
-        weight: totalWeight,
-        dimensions,
-        value: totalPrice,
-      });
-
-      setShippingOptions(response.options || []);
-      
-      // Selecionar primeira opção automaticamente
-      if (response.options && response.options.length > 0) {
-        setSelectedShipping(response.options[0]);
+      // Validar CEP
+      if (!zipCode || zipCode.replace(/\D/g, '').length !== 8) {
+        console.warn('CEP inválido para cálculo de frete:', zipCode);
+        setShippingOptions([storePickupOption]);
+        setSelectedShipping(storePickupOption);
+        setLoadingShipping(false);
+        return;
       }
-    } catch (error: any) {
-      console.error('Error calculating shipping:', error);
-      toast.error('Erro ao calcular frete', {
-        description: error.response?.data?.error || 'Tente novamente mais tarde.',
+      
+      const zipCodeDigits = zipCode.replace(/\D/g, '');
+      
+      // Calcular peso total dos itens
+      const totalWeight = items.reduce((sum, item) => {
+        return sum + (item.product.weight || 0.3) * item.quantity; // Peso padrão: 300g por item
+      }, 0);
+
+      // Calcular dimensões baseado nos itens
+      const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+      const dimensions = {
+        height: Math.max(20, totalItems * 5), // Altura mínima 20cm, +5cm por item
+        width: 20,
+        length: 20,
+      };
+      
+      // Calcular valor total para valor declarado
+      const totalValue = items.reduce((sum, item) => {
+        return sum + (item.product.price * item.quantity);
+      }, 0);
+
+      // Buscar opções de frete
+      const response = await shippingAPI.calculate({
+        destinationZipCode: zipCodeDigits,
+        weight: totalWeight,
+        dimensions: dimensions,
+        value: totalValue,
+        items: items.map(item => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+        })),
       });
+
+      // Adicionar opção de retirada na loja
+      const options = [storePickupOption, ...(response.options || [])];
+      setShippingOptions(options);
+      
+      // Selecionar primeira opção por padrão
+      if (options.length > 0) {
+        setSelectedShipping(options[0]);
+      }
+    } catch (error) {
+      console.error('Error calculating shipping:', error);
+      // Em caso de erro, ainda oferecer retirada na loja
+      setShippingOptions([storePickupOption]);
+      setSelectedShipping(storePickupOption);
     } finally {
       setLoadingShipping(false);
     }
   };
 
-  // Atualizar endereço selecionado (v2.0)
-  const handleAddressChange = (addressId: number | null) => {
-    if (addressId === null) {
-      // Novo endereço - atualizar estado primeiro
-      setIsNewAddress(true);
-      setSelectedAddressId(null);
+  // Função para buscar CEP (v2.0)
+  const handleCEPBlur = async () => {
+    const zipCodeDigits = formData.zipCode.replace(/\D/g, '');
+    if (zipCodeDigits.length !== 8) {
+      return;
+    }
+
+    setLoadingCEP(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${zipCodeDigits}/json/`);
+      const data = await response.json();
       
-      // Limpar campos do formulário ou manter valores atuais
-      setFormData(prev => ({
-        ...prev,
-        fullName: prev.fullName || user?.name || '',
-        email: prev.email || user?.email || '',
-        phone: prev.phone || '',
-        address: '',
-        neighborhood: '',
-        city: '',
-        state: '',
-        zipCode: '',
-      }));
-    } else {
-      // Endereço salvo - atualizar estado primeiro
-      setIsNewAddress(false);
-      setSelectedAddressId(addressId);
-      
-      const address = userAddresses.find((addr) => addr.id === addressId);
-      if (address) {
+      if (!data.erro) {
         setFormData(prev => ({
           ...prev,
-          fullName: address.recipientName || user?.name || '',
-          phone: address.phone || '',
-          address: `${address.street}, ${address.number}${address.complement ? ` - ${address.complement}` : ''}`,
-          neighborhood: address.neighborhood || '',
-          city: address.city,
-          state: address.state,
-          zipCode: address.zipCode.replace(/(\d{5})(\d{3})/, '$1-$2'),
+          address: data.logradouro || '',
+          neighborhood: data.bairro || '',
+          city: data.localidade || '',
+          state: data.uf || '',
+          zipCode: zipCodeDigits.replace(/(\d{5})(\d{3})/, '$1-$2'),
         }));
-
+        
         // Calcular frete automaticamente
-        calculateShipping(address.zipCode.replace(/(\d{5})(\d{3})/, '$1-$2'));
+        calculateShipping(zipCodeDigits);
       }
+    } catch (error) {
+      console.error('Error fetching CEP:', error);
+    } finally {
+      setLoadingCEP(false);
     }
   };
 
+
+  // Função para remover cupom
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    toast.info('Cupom removido');
+  };
+
+  // Função para tokenizar cartão (preparar dados para Asaas)
+  const tokenizeCard = async (): Promise<string | null> => {
+    try {
+      const cardNumber = formData.cardNumber.replace(/\D/g, '');
+      const cardExpiry = formData.cardExpiry.replace(/\D/g, '');
+      const cardCvc = formData.cardCvc;
+      const cardHolderName = formData.cardHolderName;
+      const cardHolderCpf = formData.cardHolderCpf.replace(/\D/g, '');
+
+      // Validar dados do cartão
+      if (cardNumber.length < 13 || cardNumber.length > 19) {
+        throw new Error('Número do cartão inválido');
+      }
+
+      if (cardExpiry.length !== 4) {
+        throw new Error('Validade do cartão inválida');
+      }
+
+      if (cardCvc.length < 3 || cardCvc.length > 4) {
+        throw new Error('CVC inválido');
+      }
+
+      if (!cardHolderName || cardHolderName.trim().length < 3) {
+        throw new Error('Nome do portador inválido');
+      }
+
+      if (cardHolderCpf.length !== 11) {
+        throw new Error('CPF inválido');
+      }
+
+      // Separar mês e ano da validade (formato MM/AA)
+      const expiryMonth = cardExpiry.substring(0, 2);
+      const expiryYear = '20' + cardExpiry.substring(2, 4);
+
+      // Preparar dados do cartão no formato esperado pelo backend
+      const cardData = {
+        cardNumber: cardNumber,
+        cardExpirationMonth: expiryMonth,
+        cardExpirationYear: expiryYear,
+        securityCode: cardCvc,
+        cardholderName: cardHolderName,
+        identificationType: 'CPF',
+        identificationNumber: cardHolderCpf,
+      };
+
+      // Preparar dados do cartão para envio ao backend (Asaas processa diretamente)
+      const result = await paymentsAPI.tokenizeCard(cardData);
+      
+      if (result && result.id) {
+        return result.id; // Retorna JSON string com dados do cartão
+      }
+      
+      throw new Error('Não foi possível preparar os dados do cartão');
+    } catch (error: unknown) {
+      console.error('Error tokenizing card:', error);
+      
+      let errorMessage = 'Erro ao processar dados do cartão. Verifique os dados e tente novamente.';
+      
+      if (isApiError(error)) {
+        const errorData = error.response?.data;
+        if (errorData) {
+          // Tentar extrair mensagem de erro mais específica
+          if (errorData.details) {
+            const details = errorData.details;
+            if (Array.isArray(details)) {
+              const causeMessages = details
+                .map((c: any) => {
+                  if (typeof c === 'string') return c;
+                  if (typeof c === 'object' && c !== null) {
+                    const causeObj = c as any;
+                    return causeObj.description || causeObj.message || JSON.stringify(c);
+                  }
+                  return JSON.stringify(c);
+                })
+                .filter((msg: string) => msg && msg.length > 0);
+              
+              if (causeMessages.length > 0) {
+                errorMessage = causeMessages.join(', ');
+              }
+            } else if (typeof details === 'string') {
+              errorMessage = details;
+            }
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      toast.error('Erro ao processar cartão', {
+        description: errorMessage,
+      });
+      
+      return null;
+    }
+  };
+
+  // Handler do formulário
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedPaymentMethod) {
       toast.error('Selecione um método de pagamento');
       return;
@@ -302,9 +592,9 @@ export function CheckoutPage() {
       return;
     }
 
-    // Validar campos obrigatórios se estiver criando novo endereço
+    // Validar endereço se for novo
     if (isNewAddress) {
-      const requiredFields = {
+      const requiredFields: Record<string, string> = {
         fullName: 'Nome completo',
         address: 'Endereço',
         neighborhood: 'Bairro',
@@ -372,13 +662,41 @@ export function CheckoutPage() {
           const zipCodeDigits = formData.zipCode.replace(/\D/g, '');
           if (zipCodeDigits.length === 8) {
             // Processar endereço de forma mais robusta
+            // Dividir endereço em partes (Rua, Número, Complemento)
             const addressParts = formData.address.split(',').map(part => part.trim()).filter(part => part.length > 0);
+            
+            // Extrair número do endereço (pode estar no final da primeira parte ou na segunda)
+            let street = addressParts[0] || formData.address;
+            let number = 'S/N';
+            let complement = '';
+            
+            // Tentar extrair número da primeira parte (ex: "Rua X, 123" ou "Rua X 123")
+            const numberMatch = street.match(/\s+(\d+)$/);
+            if (numberMatch) {
+              number = numberMatch[1];
+              street = street.replace(/\s+\d+$/, '').trim();
+            } else if (addressParts.length > 1) {
+              // Se não encontrou número na primeira parte, usar a segunda
+              const secondPart = addressParts[1];
+              if (/^\d+/.test(secondPart)) {
+                number = secondPart.match(/^\d+/)?.[0] || 'S/N';
+                complement = secondPart.replace(/^\d+\s*/, '').trim();
+              } else {
+                complement = secondPart;
+              }
+            }
+            
+            // Complemento pode estar na terceira parte
+            if (addressParts.length > 2 && !complement) {
+              complement = addressParts.slice(2).join(', ');
+            }
+            
             const addressData = {
               label: 'Endereço Principal',
-              street: addressParts[0] || formData.address, // Primeira parte ou endereço completo
-              number: addressParts[1] || 'S/N', // Segunda parte ou 'S/N'
-              complement: addressParts[2] || '', // Terceira parte (complemento) ou vazio
-              neighborhood: addressParts[3] || '', // Quarta parte (bairro) ou vazio
+              street: street || formData.address, // Rua
+              number: number, // Número
+              complement: complement || '', // Complemento
+              neighborhood: formData.neighborhood || '', // Bairro (do campo específico)
               city: formData.city,
               state: formData.state.toUpperCase(),
               zipCode: zipCodeDigits,
@@ -422,93 +740,435 @@ export function CheckoutPage() {
       });
 
       // Criar registro de pagamento (v2.0)
-      const paymentData: any = {
-        gateway: 'mercadopago', // Integrado com Mercado Pago
+      const paymentData: PaymentData = {
+        gateway: 'asaas', // Integrado com Asaas
         paymentMethod: selectedPaymentMethod,
-        installments: selectedPaymentMethod === 'credit_card' ? installments : 1,
+        installments: selectedPaymentMethod === 'credit_card' ? (installments || 1) : 1,
         amount: finalTotal,
       };
 
-      if (selectedPaymentMethod === 'credit_card') {
-        // Validar se o número do cartão foi preenchido
-        if (!formData.cardNumber || formData.cardNumber.trim().length < 4) {
+      // Validar campos do cartão se for crédito ou débito
+      if (selectedPaymentMethod === 'credit_card' || selectedPaymentMethod === 'debit_card') {
+        // Validar parcelamento se for cartão de crédito
+        if (selectedPaymentMethod === 'credit_card' && (!installments || installments < 1)) {
+          toast.error('Parcelamento obrigatório', {
+            description: 'Por favor, selecione o número de parcelas.',
+          });
+          setIsProcessing(false);
+          return;
+        }
+        
+        // Validar campos obrigatórios do cartão
+        if (!formData.cardNumber || formData.cardNumber.replace(/\D/g, '').length < 13) {
           toast.error('Número do cartão inválido', {
             description: 'Por favor, preencha o número do cartão corretamente.',
           });
           setIsProcessing(false);
           return;
         }
-        // Extrair últimos 4 dígitos (remover espaços e caracteres não numéricos)
+
+        if (!formData.cardExpiry || formData.cardExpiry.length < 5) {
+          toast.error('Validade do cartão inválida', {
+            description: 'Por favor, preencha a validade no formato MM/AA.',
+          });
+          setIsProcessing(false);
+          return;
+        }
+
+        if (!formData.cardCvc || formData.cardCvc.length < 3) {
+          toast.error('CVC inválido', {
+            description: 'Por favor, preencha o CVC do cartão.',
+          });
+          setIsProcessing(false);
+          return;
+        }
+
+        if (!formData.cardHolderName || formData.cardHolderName.trim().length < 3) {
+          toast.error('Nome do portador inválido', {
+            description: 'Por favor, preencha o nome do portador do cartão.',
+          });
+          setIsProcessing(false);
+          return;
+        }
+
+        if (!formData.cardHolderCpf || formData.cardHolderCpf.replace(/\D/g, '').length !== 11) {
+          toast.error('CPF inválido', {
+            description: 'Por favor, preencha o CPF do portador do cartão.',
+          });
+          setIsProcessing(false);
+          return;
+        }
+
+        // Extrair últimos 4 dígitos para salvar no banco
         const cardDigits = formData.cardNumber.replace(/\D/g, '');
         paymentData.cardLastDigits = cardDigits.slice(-4);
-        // Aqui você poderia adicionar validação de bandeira do cartão
       }
 
       // Criar registro de pagamento
       const payment = await paymentsAPI.create(order.id, paymentData);
 
-      // Processar pagamento com Mercado Pago (Checkout Pro)
+      // Processar pagamento baseado no método selecionado
       try {
-        const processResult = await paymentsAPI.process(payment.id);
-        
-        console.log('Process result:', processResult);
-        console.log('Payment object:', processResult.payment);
-        console.log('init_point:', processResult.payment?.init_point);
-        console.log('sandbox_init_point:', processResult.payment?.sandbox_init_point);
-        
-        // Tentar diferentes formas de acessar a URL
-        const checkoutUrl = 
-          processResult.payment?.sandbox_init_point || 
-          processResult.payment?.init_point ||
-          processResult.sandbox_init_point ||
-          processResult.init_point;
-        
-        if (checkoutUrl) {
-          // Rastrear compra iniciada
-          const purchaseItems = items.map((item) => ({
-            productId: item.product.id.toString(),
-            name: item.product.name,
-            quantity: item.quantity,
-            price: item.product.price,
-          }));
+        // Se for PIX, processar diretamente na página (Checkout Transparente)
+        if (selectedPaymentMethod === 'pix') {
+          const pixResult = await paymentsAPI.processPix(payment.id);
           
-          AnalyticsEvents.purchase(
-            order.id.toString(),
-            finalTotal,
-            purchaseItems,
-            appliedCoupon?.code
-          );
+          console.log('PIX payment result:', pixResult);
+          
+          // Verificar QR Code em diferentes estruturas possíveis da resposta
+          const qrCodeBase64 = pixResult.qrCodeBase64 || pixResult.payment?.qrCodeBase64 || pixResult.qrCode || pixResult.payment?.qrCode;
+          const pixCode = pixResult.pixCode || pixResult.payment?.pixCode || pixResult.code || pixResult.payment?.code;
+          const pixExpiresAt = pixResult.pixExpiresAt || pixResult.payment?.pixExpiresAt || pixResult.expiresAt || pixResult.payment?.expiresAt;
+          
+          if (qrCodeBase64 || pixCode) {
+            // Armazenar informações do PIX
+            // Adicionar prefixo data:image/png;base64, se não tiver (necessário para exibir a imagem)
+            let qrCodeImage = qrCodeBase64 || null;
+            if (qrCodeImage && !qrCodeImage.startsWith('data:')) {
+              qrCodeImage = `data:image/png;base64,${qrCodeImage}`;
+            }
+            setPixQrCode(qrCodeImage);
+            setPixCode(pixCode || null);
+            
+            // Definir data de expiração (5 minutos se não fornecida pelo Asaas)
+            let expirationDate: Date;
+            if (pixExpiresAt) {
+              expirationDate = new Date(pixExpiresAt);
+              console.log('PIX expiration from Asaas:', expirationDate);
+            } else {
+              // Fallback: 5 minutos a partir de agora
+              expirationDate = new Date();
+              expirationDate.setMinutes(expirationDate.getMinutes() + 5);
+              console.log('PIX expiration (fallback 5min):', expirationDate);
+            }
+            
+            setPixExpiresAt(expirationDate);
+            setPixPaymentId(payment.id);
+            
+            // Salvar pixPaymentId no localStorage para recuperar após recarregar página
+            localStorage.setItem('pixPaymentId', payment.id.toString());
+            
+            // Rastrear compra iniciada
+            const purchaseItems = items.map((item) => ({
+              productId: item.product.id.toString(),
+              name: item.product.name,
+              quantity: item.quantity,
+              price: item.product.price,
+            }));
+            
+            AnalyticsEvents.purchase(
+              order.id.toString(),
+              finalTotal,
+              purchaseItems,
+              appliedCoupon?.code
+            );
 
-          // Redirecionar para o Mercado Pago
-          console.log('Redirecionando para:', checkoutUrl);
-          window.location.href = checkoutUrl;
-          return;
-        } else {
-          console.error('Nenhuma URL de checkout encontrada:', {
-            processResult,
-            payment: processResult.payment,
-          });
-          throw new Error('URL de checkout não retornada pelo Mercado Pago');
+            // Redirecionar para página de pagamento
+            setIsProcessing(false);
+            toast.success('QR Code PIX gerado! Redirecionando...');
+            setTimeout(() => {
+              setLocation(`/payment/${payment.id}`);
+            }, 500);
+            return;
+          } else {
+            // Se não houver QR Code, verificar se o pagamento foi criado e tentar buscar novamente
+            console.warn('QR Code PIX não encontrado na resposta. Estrutura completa:', pixResult);
+            
+            // Se o pagamento foi criado, pode ser que o QR Code ainda esteja sendo gerado
+            if (pixResult.payment || payment.id) {
+              toast.warning('QR Code PIX ainda não está disponível', {
+                description: 'O pagamento foi criado, mas o QR Code ainda está sendo gerado. Aguarde alguns segundos...',
+              });
+              
+              // Tentar buscar o pagamento múltiplas vezes (até 5 tentativas)
+              let attempts = 0;
+              const maxAttempts = 5;
+              
+              const tryFetchQrCode = async () => {
+                attempts++;
+                try {
+                  console.log(`🔄 Tentativa ${attempts}/${maxAttempts} de buscar QR Code...`);
+                  
+                  // Buscar o pagamento atualizado
+                  const paymentData = await paymentsAPI.getById(payment.id);
+                  
+                  // Verificar se o QR Code está disponível agora
+                  const foundQrCode = paymentData.qrCodeBase64 || paymentData.pixCode;
+                  
+                  if (foundQrCode) {
+                    console.log('✅ QR Code encontrado!');
+                    // Adicionar prefixo data:image/png;base64, se não tiver (necessário para exibir a imagem)
+                    let qrCodeImage = paymentData.qrCodeBase64 || null;
+                    if (qrCodeImage && !qrCodeImage.startsWith('data:')) {
+                      qrCodeImage = `data:image/png;base64,${qrCodeImage}`;
+                    }
+                    setPixQrCode(qrCodeImage);
+                    setPixCode(paymentData.pixCode || null);
+                    setPixPaymentId(payment.id);
+                    
+                    // Salvar pixPaymentId no localStorage para recuperar após recarregar página
+                    localStorage.setItem('pixPaymentId', payment.id.toString());
+                    
+                    // Definir data de expiração
+                    if (paymentData.pixExpiresAt) {
+                      const expirationDate = new Date(paymentData.pixExpiresAt);
+                      setPixExpiresAt(expirationDate);
+                      
+                      // Inicializar contador
+                      const now = new Date();
+                      const diff = expirationDate.getTime() - now.getTime();
+                      const minutes = Math.floor(diff / 60000);
+                      const seconds = Math.floor((diff % 60000) / 1000);
+                      if (minutes > 0) {
+                        setTimeRemaining(`${minutes} min ${seconds} seg`);
+                      } else if (seconds > 0) {
+                        setTimeRemaining(`${seconds} seg`);
+                      }
+                    }
+                    
+                    // Iniciar verificação do status do pagamento PIX
+                    startPixStatusCheck(payment.id);
+                    
+                    toast.success('QR Code PIX gerado! Redirecionando...');
+                    setIsProcessing(false);
+                    
+                    // Redirecionar para página de pagamento
+                    setTimeout(() => {
+                      setLocation(`/payment/${payment.id}`);
+                    }, 500);
+                    
+                    return;
+                  }
+                  
+                  // Se ainda não encontrou e não excedeu tentativas, tentar novamente
+                  if (attempts < maxAttempts) {
+                    setTimeout(tryFetchQrCode, 2000); // Tentar novamente em 2 segundos
+                  } else {
+                    console.error('❌ QR Code não encontrado após múltiplas tentativas');
+                    toast.error('Não foi possível gerar o QR Code PIX', {
+                      description: 'Por favor, tente novamente ou entre em contato com o suporte.',
+                    });
+                    setIsProcessing(false);
+                  }
+                } catch (error) {
+                  console.error(`Erro ao buscar QR Code (tentativa ${attempts}):`, error);
+                  if (attempts < maxAttempts) {
+                    setTimeout(tryFetchQrCode, 2000);
+                  } else {
+                    toast.error('Erro ao buscar QR Code PIX', {
+                      description: 'Por favor, tente novamente.',
+                    });
+                    setIsProcessing(false);
+                  }
+                }
+              };
+              
+              // Iniciar primeira tentativa após 2 segundos
+              setTimeout(tryFetchQrCode, 2000);
+              
+              setIsProcessing(false);
+              return;
+            }
+            
+            throw new Error('QR Code PIX não foi gerado. Por favor, tente novamente.');
+          }
         }
-      } catch (paymentError: any) {
+
+        // Para cartão de crédito e débito, processar diretamente na página (Checkout Transparente)
+        if (selectedPaymentMethod === 'credit_card' || selectedPaymentMethod === 'debit_card') {
+          // Tokenizar cartão
+          toast.info('Processando pagamento...', {
+            description: 'Aguarde enquanto processamos seu pagamento.',
+          });
+
+          try {
+            const cardToken = await tokenizeCard();
+            
+            if (!cardToken) {
+              throw new Error('Não foi possível preparar os dados do cartão');
+            }
+
+            console.log('Card data prepared:', cardToken);
+
+            // Validar parcelamento antes de processar pagamento com cartão
+            if (selectedPaymentMethod === 'credit_card' && (!installments || installments < 1)) {
+              toast.error('Parcelamento obrigatório', {
+                description: 'Por favor, selecione o número de parcelas antes de processar o pagamento.',
+              });
+              setIsProcessing(false);
+              return;
+            }
+            
+            // Log para debug
+            console.log('Processing card payment - Frontend data:', {
+              selectedPaymentMethod,
+              installments,
+              paymentId: payment.id,
+            });
+            
+            // Processar pagamento com dados do cartão (Asaas processa diretamente no backend)
+            // Garantir que installments seja um número válido
+            const finalInstallments = selectedPaymentMethod === 'credit_card' 
+              ? (installments && installments > 0 ? Number(installments) : 1)
+              : 1;
+            
+            console.log('Sending to processCard API:', {
+              paymentId: payment.id,
+              hasToken: !!cardToken,
+              installments: finalInstallments,
+              installmentsType: typeof finalInstallments,
+              paymentMethodId: selectedPaymentMethod === 'credit_card' ? 'credit_card' : 'debit_card',
+            });
+            
+            const cardResult = await paymentsAPI.processCard({
+              paymentId: payment.id,
+              token: cardToken,
+              installments: finalInstallments,
+              paymentMethodId: selectedPaymentMethod === 'credit_card' ? 'credit_card' : 'debit_card',
+            });
+
+            console.log('Card payment result:', cardResult);
+
+            if (cardResult.payment) {
+              const paymentStatus = cardResult.payment.status;
+              
+              console.log('Payment status:', paymentStatus);
+              console.log('Payment status_detail:', cardResult.payment.status_detail);
+              console.log('Payment ID:', cardResult.payment.id);
+
+              // Rastrear compra iniciada
+              const purchaseItems = items.map((item) => ({
+                productId: item.product.id.toString(),
+                name: item.product.name,
+                quantity: item.quantity,
+                price: item.product.price,
+              }));
+              
+              AnalyticsEvents.purchase(
+                order.id.toString(),
+                finalTotal,
+                purchaseItems,
+                appliedCoupon?.code
+              );
+
+              if (paymentStatus === 'approved') {
+                toast.success('Pagamento aprovado!');
+                clearCart();
+                setTimeout(() => {
+                  setLocation('/checkout/success');
+                }, 2000);
+              } else if (paymentStatus === 'pending' || paymentStatus === 'in_process') {
+                toast.info('Pagamento em processamento', {
+                  description: 'Seu pagamento está sendo processado. Você receberá uma confirmação em breve.',
+                });
+                // Verificar status periodicamente
+                startCardStatusCheck(payment.id);
+              } else if (paymentStatus === 'rejected') {
+                // Mensagens de erro mais específicas baseadas no status_detail
+                let errorMessage = 'Seu pagamento foi rejeitado. Verifique os dados do cartão.';
+                const statusDetail = cardResult.payment.status_detail;
+                
+                if (statusDetail === 'cc_rejected_high_risk') {
+                  errorMessage = 'Pagamento rejeitado por alto risco. Verifique os dados do cartão ou entre em contato com o suporte.';
+                } else if (statusDetail === 'cc_rejected_insufficient_amount') {
+                  errorMessage = 'Saldo insuficiente no cartão.';
+                } else if (statusDetail === 'cc_rejected_bad_filled_card_number') {
+                  errorMessage = 'Número do cartão inválido.';
+                } else if (statusDetail === 'cc_rejected_bad_filled_date') {
+                  errorMessage = 'Data de validade inválida.';
+                } else if (statusDetail === 'cc_rejected_bad_filled_other') {
+                  errorMessage = 'Dados do cartão inválidos.';
+                } else if (statusDetail === 'cc_rejected_bad_filled_security_code') {
+                  errorMessage = 'Código de segurança (CVV) inválido.';
+                } else if (statusDetail === 'cc_rejected_other_reason') {
+                  errorMessage = 'Pagamento rejeitado. Entre em contato com o banco emissor do cartão.';
+                } else if (statusDetail) {
+                  errorMessage = `Pagamento rejeitado: ${statusDetail}`;
+                }
+                
+                toast.error('Pagamento rejeitado', {
+                  description: errorMessage,
+                });
+                setIsProcessing(false);
+                return;
+              } else {
+                toast.warning(`Status do pagamento: ${paymentStatus}`, {
+                  description: cardResult.payment.status_detail || 'Verifique o status do pagamento em seus pedidos.',
+                });
+                setIsProcessing(false);
+                return;
+              }
+            } else {
+              throw new Error('Resposta do pagamento inválida');
+            }
+          } catch (cardError: unknown) {
+            console.error('Error processing card payment:', cardError);
+            
+            // Extrair mensagem de erro mais detalhada
+            let errorMessage = 'Erro ao processar pagamento com cartão. Verifique os dados e tente novamente.';
+            
+            if (isApiError(cardError)) {
+              console.error('Error response:', cardError.response);
+              console.error('Error response data:', cardError.response?.data);
+              console.error('Error response details:', cardError.response?.data?.details);
+              
+              if (cardError.response?.data) {
+                const errorData = cardError.response.data;
+                if (errorData.details) {
+                  errorMessage = errorData.details;
+                } else if (errorData.error) {
+                  errorMessage = errorData.error;
+                } else if (errorData.message) {
+                  errorMessage = errorData.message;
+                }
+              } else if (cardError.message) {
+                errorMessage = cardError.message;
+              }
+            } else if (cardError instanceof Error) {
+              errorMessage = cardError.message;
+            }
+            
+            console.error('Final error message:', errorMessage);
+            toast.error('Erro ao processar pagamento', {
+              description: errorMessage,
+            });
+            setIsProcessing(false);
+            return;
+          }
+        }
+      } catch (paymentError: unknown) {
         console.error('Error processing payment:', paymentError);
-        const errorMessage = paymentError.response?.data?.error || paymentError.message || 'Não foi possível redirecionar para o pagamento. Tente novamente.';
-        console.error('Payment error details:', {
-          status: paymentError.response?.status,
-          data: paymentError.response?.data,
-          message: errorMessage,
-        });
+        const errorMessage = getErrorMessage(paymentError) || 'Não foi possível processar o pagamento. Tente novamente.';
+        if (isApiError(paymentError)) {
+          console.error('Payment error details:', {
+            status: paymentError.response?.status,
+            data: paymentError.response?.data,
+            message: errorMessage,
+          });
+        }
         toast.error('Erro ao processar pagamento', {
           description: errorMessage,
         });
         setIsProcessing(false);
         return;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating order:', error);
-      toast.error('Erro ao criar pedido', {
-        description: error.response?.data?.error || 'Tente novamente mais tarde.',
-      });
+      
+      // Tratamento especial para erro 429 (Too Many Requests)
+      if (isApiError(error) && error.response?.status === 429) {
+        const retryAfter = error.response?.data?.retryAfter || 15 * 60;
+        const minutes = Math.ceil(retryAfter / 60);
+        toast.error('Muitas tentativas de checkout', {
+          description: `Você fez muitas tentativas. Por favor, aguarde ${minutes} minuto${minutes > 1 ? 's' : ''} antes de tentar novamente.`,
+          duration: 10000,
+        });
+      } else {
+        const errorMessage = getErrorMessage(error) || 'Tente novamente mais tarde.';
+        toast.error('Erro ao criar pedido', {
+          description: errorMessage,
+        });
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -530,450 +1190,467 @@ export function CheckoutPage() {
                 Informações de Entrega
               </h2>
 
-              {/* Seleção de Endereços Salvos (v2.0) */}
-              {userAddresses.length > 0 && (
-                <div className="mb-6 space-y-3">
-                  <Label className="text-base font-semibold">Endereços Salvos</Label>
-                  <RadioGroup
-                    value={isNewAddress ? 'new' : (selectedAddressId ? selectedAddressId.toString() : '')}
-                    onValueChange={(value) => {
-                      // Forçar atualização do estado
-                      if (value === 'new') {
-                        setIsNewAddress(true);
-                        setSelectedAddressId(null);
-                        handleAddressChange(null);
-                      } else if (value && value !== '') {
-                        const addressId = parseInt(value);
-                        if (!isNaN(addressId) && addressId > 0) {
-                          setIsNewAddress(false);
-                          setSelectedAddressId(addressId);
-                          handleAddressChange(addressId);
-                        }
+              {/* Seleção de endereço (v2.0) */}
+              <div className="mb-6">
+                <Label className="mb-2 block">Endereço de Entrega</Label>
+                <RadioGroup
+                  value={isNewAddress ? 'new' : selectedAddressId?.toString() || ''}
+                  onValueChange={(value) => {
+                    if (value === 'new') {
+                      setIsNewAddress(true);
+                      setSelectedAddressId(null);
+                    } else {
+                      setIsNewAddress(false);
+                      setSelectedAddressId(Number(value));
+                      const address = userAddresses.find((addr) => addr.id === Number(value));
+                      if (address) {
+                        setFormData(prev => ({
+                          ...prev,
+                          fullName: address.recipientName || user?.name || '',
+                          phone: address.phone || '',
+                          address: `${address.street}, ${address.number}${address.complement ? ` - ${address.complement}` : ''}`,
+                          city: address.city,
+                          state: address.state,
+                          zipCode: address.zipCode.replace(/(\d{5})(\d{3})/, '$1-$2'),
+                        }));
+                        calculateShipping(address.zipCode.replace(/(\d{5})(\d{3})/, '$1-$2'));
                       }
-                    }}
-                  >
-                    {userAddresses.map((address) => (
-                      <div
-                        key={address.id}
-                        className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                          selectedAddressId === address.id && !isNewAddress
-                            ? 'border-sky-500 bg-sky-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <RadioGroupItem 
-                          value={address.id.toString()} 
-                          id={`address-${address.id}`} 
-                          className="mt-1"
-                        />
-                        <label
-                          htmlFor={`address-${address.id}`}
-                          className="flex-1 cursor-pointer"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <MapPin className="h-4 w-4 text-gray-500" />
-                                <span className="font-medium">
-                                  {address.label || 'Endereço'} {address.isDefault && (
-                                    <span className="ml-2 px-2 py-0.5 text-xs bg-sky-100 text-sky-700 rounded">
-                                      Padrão
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-600">
-                                {address.street}, {address.number}
-                                {address.complement && ` - ${address.complement}`}
-                              </p>
-                              <p className="text-sm text-gray-600">
-                                {address.neighborhood}, {address.city} - {address.state}
-                              </p>
-                              <p className="text-sm text-gray-500">CEP: {address.zipCode.replace(/(\d{5})(\d{3})/, '$1-$2')}</p>
-                              {address.recipientName && (
-                                <p className="text-xs text-gray-500 mt-1">Destinatário: {address.recipientName}</p>
-                              )}
-                            </div>
-                            {selectedAddressId === address.id && !isNewAddress && (
-                              <Check className="h-5 w-5 text-sky-500" />
-                            )}
-                          </div>
-                        </label>
-                      </div>
-                    ))}
-                    
-                    {/* Opção para novo endereço */}
-                    <div
-                      className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                        isNewAddress
-                          ? 'border-sky-500 bg-sky-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <RadioGroupItem 
-                        value="new" 
-                        id="address-new" 
-                        className="mt-1"
-                      />
-                      <label 
-                        htmlFor="address-new" 
-                        className="flex-1 cursor-pointer flex items-center gap-2"
-                      >
-                        <Plus className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">Usar novo endereço</span>
-                        {isNewAddress && <Check className="h-5 w-5 text-sky-500 ml-auto" />}
-                      </label>
+                    }
+                  }}
+                >
+                  {userAddresses.map((address) => (
+                    <div key={address.id} className="mb-2 flex items-start space-x-2">
+                      <RadioGroupItem value={address.id.toString()} id={`address-${address.id}`} />
+                      <Label htmlFor={`address-${address.id}`} className="flex-1 cursor-pointer">
+                        <div className="font-medium">{address.label || 'Endereço'}</div>
+                        <div className="text-sm text-gray-600">
+                          {address.street}, {address.number}
+                          {address.complement && ` - ${address.complement}`}
+                          <br />
+                          {address.neighborhood}, {address.city} - {address.state}
+                          <br />
+                          CEP: {address.zipCode.replace(/(\d{5})(\d{3})/, '$1-$2')}
+                        </div>
+                      </Label>
                     </div>
-                  </RadioGroup>
-                </div>
-              )}
-
-              {/* Formulário de Endereço */}
-              <div className="space-y-4">
-                {userAddresses.length === 0 && (
-                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-800">
-                      💡 Você ainda não tem endereços salvos. Preencha o formulário abaixo para criar seu primeiro endereço.
-                    </p>
+                  ))}
+                  <div className="mb-2 flex items-start space-x-2">
+                    <RadioGroupItem value="new" id="address-new" />
+                    <Label htmlFor="address-new" className="flex-1 cursor-pointer">
+                      <div className="font-medium">Novo Endereço</div>
+                    </Label>
                   </div>
-                )}
+                </RadioGroup>
+              </div>
 
-                <div>
-                  <Label htmlFor="fullName">Nome Completo</Label>
-                  <Input
-                    id="fullName"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleInputChange}
-                    required
-                    className="mt-2"
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      required
-                      className="mt-2"
-                    />
+              {/* Formulário de endereço (v2.0) */}
+              {isNewAddress && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="fullName">Nome Completo *</Label>
+                      <Input
+                        id="fullName"
+                        value={formData.fullName}
+                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Telefone *</Label>
+                      <Input
+                        id="phone"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="(00) 00000-0000"
+                        required
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="phone">Telefone</Label>
-                    <Input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      required
-                      className="mt-2"
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <Label htmlFor="address">Endereço (Rua/Logradouro) *</Label>
-                  <Input
-                    id="address"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    required
-                    className="mt-2"
-                    placeholder="Rua, Avenida, etc."
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="neighborhood">Bairro *</Label>
-                  <Input
-                    id="neighborhood"
-                    name="neighborhood"
-                    value={formData.neighborhood}
-                    onChange={handleInputChange}
-                    required
-                    className="mt-2"
-                    placeholder="Bairro"
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <Label htmlFor="city">Cidade *</Label>
-                    <Input
-                      id="city"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleInputChange}
-                      required
-                      className="mt-2"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="state">Estado (UF) *</Label>
-                    <Input
-                      id="state"
-                      name="state"
-                      value={formData.state}
-                      onChange={handleInputChange}
-                      required
-                      className="mt-2"
-                      maxLength={2}
-                      placeholder="SP"
-                    />
-                  </div>
                   <div>
                     <Label htmlFor="zipCode">CEP *</Label>
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex gap-2">
                       <Input
                         id="zipCode"
-                        name="zipCode"
                         value={formData.zipCode}
-                        onChange={handleInputChange}
-                        required
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          const formatted = value.replace(/(\d{5})(\d{3})/, '$1-$2');
+                          setFormData({ ...formData, zipCode: formatted });
+                        }}
+                        onBlur={handleCEPBlur}
                         placeholder="00000-000"
                         maxLength={9}
-                        className="flex-1"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            const cepDigits = formData.zipCode.replace(/\D/g, '');
-                            if (cepDigits.length === 8) {
-                              searchCEP(formData.zipCode);
-                            }
-                          }
-                        }}
+                        required
                       />
-                      <Button
-                        type="button"
-                        onClick={() => searchCEP(formData.zipCode)}
-                        disabled={loadingCEP || formData.zipCode.replace(/\D/g, '').length !== 8}
-                        className="px-3 sm:px-4"
-                        variant="outline"
-                        title="Buscar endereço pelo CEP"
-                      >
-                        {loadingCEP ? (
-                          <span className="text-xs">...</span>
-                        ) : (
-                          <Search className="h-4 w-4" />
-                        )}
-                      </Button>
+                      {loadingCEP && <Loader2 className="h-5 w-5 animate-spin text-sky-500" />}
                     </div>
-                    {loadingShipping && (
-                      <p className="text-xs text-gray-500 mt-1">Calculando frete...</p>
-                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="address">Endereço *</Label>
+                    <Input
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      placeholder="Rua, Avenida, etc."
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="neighborhood">Bairro *</Label>
+                      <Input
+                        id="neighborhood"
+                        value={formData.neighborhood}
+                        onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="city">Cidade *</Label>
+                      <Input
+                        id="city"
+                        value={formData.city}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="state">Estado *</Label>
+                    <Input
+                      id="state"
+                      value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })}
+                      placeholder="SP"
+                      maxLength={2}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Shipping Options (v2.0) */}
+            {!loadingShipping && shippingOptions.length > 0 && (
+              <div className="rounded-2xl bg-white p-6 shadow-md">
+                <h2 className="mb-6 text-sky-500" style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+                  Opções de Frete
+                </h2>
+                <RadioGroup
+                  value={selectedShipping?.service || ''}
+                  onValueChange={(value) => {
+                    const option = shippingOptions.find((opt) => opt.service === value);
+                    if (option) {
+                      setSelectedShipping(option);
+                    }
+                  }}
+                >
+                  {shippingOptions.map((option) => (
+                    <div key={option.service} className="mb-2 flex items-center justify-between rounded-lg border p-4">
+                      <div className="flex items-center space-x-3">
+                        <RadioGroupItem value={option.service} id={`shipping-${option.service}`} />
+                        <Label htmlFor={`shipping-${option.service}`} className="cursor-pointer">
+                          <div className="font-medium">{option.name}</div>
+                          {option.estimatedDays > 0 && (
+                            <div className="text-sm text-gray-600">
+                              Prazo estimado: {option.estimatedDays} dia(s)
+                            </div>
+                          )}
+                        </Label>
+                      </div>
+                      <div className="font-bold text-sky-500">
+                        {option.price === 0 ? 'Grátis' : `R$ ${option.price.toFixed(2).replace('.', ',')}`}
+                      </div>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            )}
+
+            {loadingShipping && (
+              <div className="rounded-2xl bg-white p-6 shadow-md">
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+                  <span className="ml-3 text-gray-600">Calculando frete...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Method */}
+            <div className="rounded-2xl bg-white p-6 shadow-md">
+              <h2 className="mb-6 text-sky-500" style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+                Método de Pagamento
+              </h2>
+              <PaymentMethodSelector
+                selectedMethod={selectedPaymentMethod}
+                onMethodChange={setSelectedPaymentMethod}
+                installments={installments}
+                onInstallmentsChange={setInstallments}
+                totalAmount={
+                  (appliedCoupon ? appliedCoupon.finalTotal : totalPrice) +
+                  (selectedShipping?.price || 0)
+                }
+              />
+            </div>
+
+            {/* Card Details (v2.0) */}
+            {(selectedPaymentMethod === 'credit_card' || selectedPaymentMethod === 'debit_card') && (
+              <div className="rounded-2xl bg-white p-6 shadow-md">
+                <h2 className="mb-6 text-sky-500" style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+                  Dados do Cartão
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="cardNumber">Número do Cartão *</Label>
+                    <Input
+                      id="cardNumber"
+                      value={formData.cardNumber}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '');
+                        const formatted = value.replace(/(\d{4})(?=\d)/g, '$1 ');
+                        setFormData({ ...formData, cardNumber: formatted });
+                      }}
+                      placeholder="0000 0000 0000 0000"
+                      maxLength={19}
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="cardExpiry">Validade *</Label>
+                      <Input
+                        id="cardExpiry"
+                        value={formData.cardExpiry}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          const formatted = value.replace(/(\d{2})(\d{2})/, '$1/$2');
+                          setFormData({ ...formData, cardExpiry: formatted });
+                        }}
+                        placeholder="MM/AA"
+                        maxLength={5}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="cardCvc">CVC *</Label>
+                      <Input
+                        id="cardCvc"
+                        value={formData.cardCvc}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          setFormData({ ...formData, cardCvc: value });
+                        }}
+                        placeholder="000"
+                        maxLength={4}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="cardHolderName">Nome do Portador *</Label>
+                    <Input
+                      id="cardHolderName"
+                      value={formData.cardHolderName}
+                      onChange={(e) => setFormData({ ...formData, cardHolderName: e.target.value })}
+                      placeholder="Nome como está no cartão"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="cardHolderCpf">CPF do Portador *</Label>
+                    <Input
+                      id="cardHolderCpf"
+                      value={formData.cardHolderCpf}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '');
+                        const formatted = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                        setFormData({ ...formData, cardHolderCpf: formatted });
+                      }}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      required
+                    />
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Payment Information */}
-            <div className="rounded-2xl bg-white p-6 shadow-md">
-              <h2 className="mb-6 text-sky-500" style={{ fontSize: '1.5rem', fontWeight: 700 }}>
-                Informações de Pagamento
-              </h2>
-
-              <div className="space-y-6">
-                {/* Seleção de Método de Pagamento */}
-                <PaymentMethodSelector
-                  selectedMethod={selectedPaymentMethod}
-                  onMethodChange={setSelectedPaymentMethod}
-                  installments={installments}
-                  onInstallmentsChange={setInstallments}
-                />
-
-                {/* Campos de cartão (apenas se cartão de crédito selecionado) */}
-                {selectedPaymentMethod === 'credit_card' && (
-                  <div className="space-y-4 pt-4 border-t border-gray-200">
-                    <div>
-                      <Label htmlFor="cardNumber">Número do Cartão</Label>
-                      <Input
-                        id="cardNumber"
-                        name="cardNumber"
-                        placeholder="1234 5678 9012 3456"
-                        value={formData.cardNumber}
-                        onChange={handleInputChange}
-                        required
-                        className="mt-2"
-                        maxLength={19}
-                      />
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <Label htmlFor="cardExpiry">Validade</Label>
-                        <Input
-                          id="cardExpiry"
-                          name="cardExpiry"
-                          placeholder="MM/YY"
-                          value={formData.cardExpiry}
-                          onChange={handleInputChange}
-                          required
-                          className="mt-2"
-                          maxLength={5}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="cardCvc">CVC</Label>
-                        <Input
-                          id="cardCvc"
-                          name="cardCvc"
-                          placeholder="123"
-                          value={formData.cardCvc}
-                          onChange={handleInputChange}
-                          required
-                          className="mt-2"
-                          maxLength={4}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Mensagens informativas para PIX e Boleto */}
-                {selectedPaymentMethod === 'pix' && (
-                  <div className="rounded-lg bg-blue-50 p-4 border border-blue-200">
-                    <p className="text-sm text-blue-800">
-                      💡 Você receberá o código PIX após confirmar o pedido. O pagamento é processado instantaneamente.
-                    </p>
-                  </div>
-                )}
-
-                {selectedPaymentMethod === 'boleto' && (
-                  <div className="rounded-lg bg-yellow-50 p-4 border border-yellow-200">
+            {/* PIX Payment Section */}
+            {pixPaymentId && (pixQrCode || pixCode) && (
+              <div id="pix-payment-section" className="rounded-2xl bg-white p-6 shadow-md">
+                <h2 className="mb-4 text-sky-500" style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+                  Pagamento PIX
+                </h2>
+                {pixExpiresAt && (
+                  <div className="mb-4 rounded-lg bg-yellow-50 p-4">
                     <p className="text-sm text-yellow-800">
-                      💡 Você receberá o boleto após confirmar o pedido. O pedido será processado após a confirmação do pagamento.
+                      <strong>Tempo restante:</strong> {timeRemaining || 'Calculando...'}
                     </p>
+                  </div>
+                )}
+                {pixQrCode && (
+                  <div className="mb-4 flex flex-col items-center">
+                    <img src={pixQrCode} alt="QR Code PIX" className="mb-4 h-64 w-64" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (pixCode) {
+                          navigator.clipboard.writeText(pixCode);
+                          toast.success('Código PIX copiado!');
+                        } else {
+                          toast.error('Código PIX não disponível');
+                        }
+                      }}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copiar Código PIX
+                    </Button>
+                  </div>
+                )}
+                {pixCode && !pixQrCode && (
+                  <div className="mb-4">
+                    <Label>Código PIX</Label>
+                    <div className="flex gap-2">
+                      <Input value={pixCode} readOnly />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(pixCode);
+                          toast.success('Código PIX copiado!');
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {checkingPixStatus && (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-sky-500" />
+                    <span className="ml-2 text-sm text-gray-600">Verificando pagamento...</span>
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Coupon Section */}
+            <div className="rounded-2xl bg-white p-6 shadow-md">
+              <CouponInput
+                subtotal={totalPrice}
+                onCouponApplied={(coupon) => {
+                  // O CouponInput já retorna o cupom validado, mas precisamos buscar o tipo do cupom
+                  // Por enquanto, vamos usar 'fixed' como padrão, mas isso será ajustado quando a API retornar o tipo
+                  setAppliedCoupon({
+                    code: coupon.code,
+                    discount: coupon.discountAmount,
+                    discountType: 'fixed' as const, // Será ajustado quando a API retornar o tipo correto
+                    finalTotal: coupon.finalTotal,
+                  });
+                }}
+                onCouponRemoved={handleRemoveCoupon}
+                appliedCoupon={appliedCoupon ? {
+                  code: appliedCoupon.code,
+                  discountAmount: appliedCoupon.discount,
+                  finalTotal: appliedCoupon.finalTotal,
+                } : null}
+              />
             </div>
           </div>
 
           {/* Order Summary */}
-          <div className="lg:sticky lg:top-4 lg:h-fit">
-            <div className="rounded-2xl bg-white p-6 shadow-lg">
+          <div className="space-y-6">
+            <div className="rounded-2xl bg-white p-6 shadow-md">
               <h2 className="mb-6 text-sky-500" style={{ fontSize: '1.5rem', fontWeight: 700 }}>
                 Resumo do Pedido
               </h2>
-
-              <div className="mb-4 space-y-3">
+              <div className="space-y-4">
                 {items.map((item) => (
-                  <div key={`${item.product.id}-${item.size}-${item.color}`} className="flex justify-between text-gray-600" style={{ fontSize: '0.875rem' }}>
-                    <span>
-                      {item.product.name} x {item.quantity}
-                    </span>
-                    <span style={{ fontWeight: 600 }}>
-                      R$ {(item.product.price * item.quantity).toFixed(2)}
-                    </span>
+                  <div key={`${item.product.id}-${item.size}-${item.color}`} className="flex items-center gap-4">
+                    <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-blue-50 to-orange-50">
+                      <ImageWithFallback
+                        src={item.product.image}
+                        alt={item.product.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-medium">{item.product.name}</h3>
+                      <p className="text-sm text-gray-600">
+                        {item.size && `Tamanho: ${item.size}`}
+                        {item.size && item.color && ' • '}
+                        {item.color && `Cor: ${item.color}`}
+                      </p>
+                      <p className="text-sm text-gray-600">Quantidade: {item.quantity}</p>
+                    </div>
+                    <div className="font-bold text-sky-500">
+                      R$ {(item.product.price * item.quantity).toFixed(2).replace('.', ',')}
+                    </div>
                   </div>
                 ))}
               </div>
-
               <Separator className="my-4" />
-
-              {/* Coupon Input */}
-              <CouponInput
-                subtotal={totalPrice}
-                onCouponApplied={setAppliedCoupon}
-                onCouponRemoved={() => setAppliedCoupon(null)}
-                appliedCoupon={appliedCoupon}
-              />
-
-              <Separator className="my-4" />
-
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span style={{ fontWeight: 600 }}>R$ {totalPrice.toFixed(2)}</span>
+                  <span>Subtotal</span>
+                  <span>R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
                 </div>
                 {appliedCoupon && (
                   <div className="flex justify-between text-green-600">
                     <span>Desconto ({appliedCoupon.code})</span>
-                    <span style={{ fontWeight: 600 }}>- R$ {appliedCoupon.discountAmount.toFixed(2)}</span>
+                    <span>
+                      -R${' '}
+                      {appliedCoupon.discountType === 'percentage'
+                        ? ((totalPrice * appliedCoupon.discount) / 100).toFixed(2)
+                        : appliedCoupon.discount.toFixed(2)}
+                    </span>
                   </div>
                 )}
-                {/* Opções de frete (v2.0) */}
-                {loadingShipping ? (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Frete</span>
-                    <span className="text-sm text-gray-500">Calculando...</span>
-                  </div>
-                ) : shippingOptions.length > 0 ? (
-                  <div className="space-y-2">
-                    <Label className="text-gray-600">Opções de entrega</Label>
-                    {shippingOptions.map((option: any) => (
-                      <div
-                        key={option.service}
-                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                          selectedShipping?.service === option.service
-                            ? 'border-sky-500 bg-sky-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => setSelectedShipping(option)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-sm">{option.service}</p>
-                            <p className="text-xs text-gray-600">
-                              {option.name || `Prazo estimado: ${option.estimatedDays} dia${option.estimatedDays !== 1 ? 's' : ''} útil${option.estimatedDays !== 1 ? 'is' : ''}`}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">R$ {option.price.toFixed(2)}</span>
-                            <input
-                              type="radio"
-                              checked={selectedShipping?.service === option.service}
-                              onChange={() => setSelectedShipping(option)}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : formData.zipCode.length === 9 ? (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Frete</span>
-                    <span className="text-sm text-gray-500">Informe o CEP para calcular</span>
-                  </div>
-                ) : (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Frete</span>
-                    <span style={{ fontWeight: 600 }}>A calcular</span>
-                  </div>
-                )}
-                <Separator />
                 {selectedShipping && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Frete ({selectedShipping.service})</span>
-                    <span className="font-medium">R$ {selectedShipping.price.toFixed(2)}</span>
+                  <div className="flex justify-between">
+                    <span>Frete ({selectedShipping.name})</span>
+                    <span>
+                      {selectedShipping.price === 0
+                        ? 'Grátis'
+                        : `R$ ${selectedShipping.price.toFixed(2).replace('.', ',')}`}
+                    </span>
                   </div>
                 )}
-                <Separator />
-                <div className="flex justify-between">
-                  <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>Total</span>
-                  <span className="text-sky-500" style={{ fontSize: '1.5rem', fontWeight: 900 }}>
-                    R$ {((appliedCoupon ? appliedCoupon.finalTotal : totalPrice) + (selectedShipping?.price || 0)).toFixed(2)}
+                <Separator className="my-2" />
+                <div className="flex justify-between text-lg font-bold">
+                  <span>Total</span>
+                  <span className="text-sky-500">
+                    R${' '}
+                    {(
+                      (appliedCoupon ? appliedCoupon.finalTotal : totalPrice) +
+                      (selectedShipping?.price || 0)
+                    ).toFixed(2).replace('.', ',')}
                   </span>
                 </div>
               </div>
-
-              <Button
-                type="submit"
-                size="lg"
-                disabled={isProcessing}
-                className="mt-6 w-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 py-6 text-white shadow-lg hover:from-amber-500 hover:to-orange-600 disabled:opacity-50"
-                style={{ fontWeight: 700, fontSize: '1.1rem' }}
-              >
-                {isProcessing ? 'Processando...' : 'Finalizar Pedido'}
-              </Button>
             </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={isProcessing || !selectedPaymentMethod || !selectedShipping}
+            >
+              {isProcessing ? 'Processando...' : 'Finalizar Pedido'}
+            </Button>
           </div>
         </div>
       </form>

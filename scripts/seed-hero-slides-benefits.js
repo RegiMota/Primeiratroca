@@ -78,7 +78,7 @@ async function main() {
         {
           iconName: 'CreditCard',
           mainText: 'Parcele sem juros',
-          subText: 'Em até 6x',
+          subText: 'Em até 3x',
           order: 2,
           isActive: true,
         },

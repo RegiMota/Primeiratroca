@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 interface Notification {
   id: number;
   userId: number;
-  type: 'order' | 'stock' | 'system' | 'coupon';
+  type: 'order' | 'stock' | 'system' | 'coupon' | 'payment';
   title: string;
   message: string;
   data?: any;

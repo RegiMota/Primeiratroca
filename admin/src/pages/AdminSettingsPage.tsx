@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { adminAPI } from '../lib/api';
-import { Settings, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { adminAPI, themeAPI } from '../lib/api';
+import { Settings, Upload, Image as ImageIcon, Trash2, Palette, Code } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 
 export function AdminSettingsPage() {
   const { user } = useAuth();
   const [logo, setLogo] = useState<string | null>(null);
+  const [logoLink, setLogoLink] = useState<string>('/');
+  const [logoSize, setLogoSize] = useState<string>('150px');
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -21,6 +25,8 @@ export function AdminSettingsPage() {
         setLoading(true);
         const data = await adminAPI.getLogo();
         setLogo(data.logo);
+        setLogoLink(data.logoLink || '/');
+        setLogoSize(data.logoSize || '150px');
         setPreview(data.logo);
       } catch (error) {
         console.error('Error loading logo:', error);
@@ -127,7 +133,7 @@ export function AdminSettingsPage() {
 
     try {
       setUploading(true);
-        await adminAPI.updateLogo(preview);
+      await adminAPI.updateLogo(preview, logoLink, logoSize);
       setLogo(preview);
       toast.success('Logo atualizada com sucesso!');
     } catch (error: any) {
@@ -141,7 +147,7 @@ export function AdminSettingsPage() {
   const handleRemove = async () => {
     try {
       setUploading(true);
-      await adminAPI.updateLogo('');
+      await adminAPI.updateLogo('', logoLink, logoSize);
       setLogo(null);
       setPreview(null);
       toast.success('Logo removida com sucesso!');
@@ -181,9 +187,21 @@ export function AdminSettingsPage() {
         </div>
       </div>
 
-      <div className="space-y-6">
-        {/* Logo Section */}
-        <Card className="border-2 border-gray-200 dark:border-gray-700 shadow-lg">
+      <Tabs defaultValue="logo" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="logo">
+            <ImageIcon className="mr-2 h-4 w-4" />
+            Logo
+          </TabsTrigger>
+          <TabsTrigger value="styling">
+            <Palette className="mr-2 h-4 w-4" />
+            Estilização
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="logo" className="space-y-6">
+          {/* Logo Section */}
+          <Card className="border-2 border-gray-200 dark:border-gray-700 shadow-lg">
           <CardHeader className="bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-900/20 dark:to-blue-900/20 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-500 shadow-md">
@@ -247,11 +265,17 @@ export function AdminSettingsPage() {
                   Preview da Logo
                 </Label>
                 <div className="flex items-center gap-4 p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 shadow-sm">
-                  <div className="h-20 w-auto flex items-center justify-center bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-center bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md border border-gray-200 dark:border-gray-700" style={{ minHeight: '80px' }}>
                     <img
                       src={preview}
                       alt="Logo preview"
-                      className="max-h-14 max-w-40 object-contain"
+                      style={{ 
+                        height: logoSize || '150px', 
+                        width: 'auto', 
+                        maxWidth: '500px',
+                        objectFit: 'contain'
+                      }}
+                      className="object-contain"
                     />
                   </div>
                   <div className="flex-1">
@@ -259,12 +283,78 @@ export function AdminSettingsPage() {
                       Esta é como a logo aparecerá no cabeçalho do site
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      A logo será redimensionada automaticamente para se ajustar ao cabeçalho
+                      Tamanho atual: {logoSize || '150px'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Link: {logoLink || '/'}
                     </p>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* Link da Logo */}
+            <div className="space-y-2">
+              <Label htmlFor="logo-link">Link da Logo (onde redireciona ao clicar)</Label>
+              <Input
+                id="logo-link"
+                type="text"
+                value={logoLink}
+                onChange={(e) => setLogoLink(e.target.value)}
+                placeholder="/"
+                className="mt-2"
+              />
+              <p className="text-xs text-gray-500">
+                Ex: /, /shop, /home, ou URL externa como https://exemplo.com
+              </p>
+            </div>
+
+            {/* Tamanho da Logo */}
+            <div className="space-y-2">
+              <Label htmlFor="logo-size">Tamanho da Logo</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="logo-size"
+                  type="text"
+                  value={logoSize}
+                  onChange={(e) => setLogoSize(e.target.value)}
+                  placeholder="150px"
+                  className="flex-1"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLogoSize('100px')}
+                    className="text-xs"
+                  >
+                    100px
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLogoSize('150px')}
+                    className="text-xs"
+                  >
+                    150px
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLogoSize('200px')}
+                    className="text-xs"
+                  >
+                    200px
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                Ex: 150px, 200px, 10rem, ou auto. Use valores CSS válidos.
+              </p>
+            </div>
 
             {/* Upload */}
             <div className="space-y-3">
@@ -284,19 +374,19 @@ export function AdminSettingsPage() {
                 </div>
                 <Button
                   onClick={handleUpload}
-                  disabled={!preview || uploading || preview === logo}
+                  disabled={uploading || (!preview && !logo)}
                   className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white shadow-lg hover:shadow-xl transition-all font-semibold px-6"
                   style={{ fontWeight: 700 }}
                 >
                   <Upload className="mr-2 h-4 w-4" />
-                  {uploading ? 'Salvando...' : 'Salvar Logo'}
+                  {uploading ? 'Salvando...' : 'Salvar Configurações'}
                 </Button>
               </div>
-              {preview && preview !== logo && (
+              {(preview && preview !== logo) || (logoLink !== '/' && logoLink !== '') || (logoSize !== '150px' && logoSize !== '') ? (
                 <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                  ⚠️ Você tem uma nova logo selecionada. Clique em "Salvar Logo" para aplicar as alterações.
+                  ⚠️ Você tem alterações pendentes. Clique em "Salvar Configurações" para aplicar.
                 </p>
-              )}
+              ) : null}
             </div>
 
             {/* Remover */}
@@ -316,22 +406,341 @@ export function AdminSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Placeholder para futuras configurações */}
-        <Card className="border-2 border-gray-200 dark:border-gray-700 shadow-lg opacity-50">
-          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-700">
-            <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              Configurações Adicionais
-            </CardTitle>
-            <CardDescription className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Mais opções de configuração em breve
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-              Novas configurações serão adicionadas aqui em breve
+        </TabsContent>
+
+        <TabsContent value="styling">
+          <StylingSection />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// Componente para seção de estilização
+function StylingSection() {
+  const [theme, setTheme] = useState({
+    colors: {
+      primary: '#0ea5e9',
+      secondary: '#46d392',
+      accent: '#f59e0b',
+      background: '#ffffff',
+      text: '#1f2937',
+    },
+    sizes: {
+      cardWidth: '280px',
+      cardHeight: 'auto',
+      borderRadius: '12px',
+    },
+    customCSS: '',
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        setLoading(true);
+        const data = await themeAPI.get();
+        setTheme(data);
+      } catch (error) {
+        console.error('Error loading theme:', error);
+        toast.error('Erro ao carregar configurações de tema');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTheme();
+  }, []);
+
+  const handleColorChange = (colorKey: string, value: string) => {
+    setTheme(prev => ({
+      ...prev,
+      colors: {
+        ...prev.colors,
+        [colorKey]: value,
+      },
+    }));
+  };
+
+  const handleSizeChange = (sizeKey: string, value: string) => {
+    setTheme(prev => ({
+      ...prev,
+      sizes: {
+        ...prev.sizes,
+        [sizeKey]: value,
+      },
+    }));
+  };
+
+  const handleCustomCSSChange = (value: string) => {
+    setTheme(prev => ({
+      ...prev,
+      customCSS: value,
+    }));
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      await themeAPI.update(theme);
+      toast.success('Configurações de estilização salvas com sucesso!');
+    } catch (error: any) {
+      console.error('Error saving theme:', error);
+      toast.error(error?.response?.data?.error || 'Erro ao salvar configurações');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-600">Carregando configurações de estilização...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Cores */}
+      <Card className="border-2 border-gray-200 dark:border-gray-700 shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-purple-400 to-pink-500 shadow-md">
+              <Palette className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                Cores do Site
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Personalize as cores principais do site
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="primary-color">Cor Primária</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="primary-color"
+                  type="color"
+                  value={theme.colors.primary}
+                  onChange={(e) => handleColorChange('primary', e.target.value)}
+                  className="w-20 h-10 cursor-pointer"
+                />
+                <Input
+                  type="text"
+                  value={theme.colors.primary}
+                  onChange={(e) => handleColorChange('primary', e.target.value)}
+                  className="flex-1"
+                  placeholder="#0ea5e9"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="secondary-color">Cor Secundária</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="secondary-color"
+                  type="color"
+                  value={theme.colors.secondary}
+                  onChange={(e) => handleColorChange('secondary', e.target.value)}
+                  className="w-20 h-10 cursor-pointer"
+                />
+                <Input
+                  type="text"
+                  value={theme.colors.secondary}
+                  onChange={(e) => handleColorChange('secondary', e.target.value)}
+                  className="flex-1"
+                  placeholder="#46d392"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="accent-color">Cor de Destaque</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="accent-color"
+                  type="color"
+                  value={theme.colors.accent}
+                  onChange={(e) => handleColorChange('accent', e.target.value)}
+                  className="w-20 h-10 cursor-pointer"
+                />
+                <Input
+                  type="text"
+                  value={theme.colors.accent}
+                  onChange={(e) => handleColorChange('accent', e.target.value)}
+                  className="flex-1"
+                  placeholder="#f59e0b"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="background-color">Cor de Fundo</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="background-color"
+                  type="color"
+                  value={theme.colors.background}
+                  onChange={(e) => handleColorChange('background', e.target.value)}
+                  className="w-20 h-10 cursor-pointer"
+                />
+                <Input
+                  type="text"
+                  value={theme.colors.background}
+                  onChange={(e) => handleColorChange('background', e.target.value)}
+                  className="flex-1"
+                  placeholder="#ffffff"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="text-color">Cor do Texto</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="text-color"
+                  type="color"
+                  value={theme.colors.text}
+                  onChange={(e) => handleColorChange('text', e.target.value)}
+                  className="w-20 h-10 cursor-pointer"
+                />
+                <Input
+                  type="text"
+                  value={theme.colors.text}
+                  onChange={(e) => handleColorChange('text', e.target.value)}
+                  className="flex-1"
+                  placeholder="#1f2937"
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tamanhos */}
+      <Card className="border-2 border-gray-200 dark:border-gray-700 shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-400 to-cyan-500 shadow-md">
+              <Settings className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                Tamanhos e Espaçamentos
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Ajuste os tamanhos de cards e elementos
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="card-width">Largura do Card</Label>
+              <Input
+                id="card-width"
+                type="text"
+                value={theme.sizes.cardWidth}
+                onChange={(e) => handleSizeChange('cardWidth', e.target.value)}
+                placeholder="280px"
+              />
+              <p className="text-xs text-gray-500">Ex: 280px, 20rem, 100%</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="card-height">Altura do Card</Label>
+              <Input
+                id="card-height"
+                type="text"
+                value={theme.sizes.cardHeight}
+                onChange={(e) => handleSizeChange('cardHeight', e.target.value)}
+                placeholder="auto"
+              />
+              <p className="text-xs text-gray-500">Ex: auto, 400px, 100%</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="border-radius">Raio da Borda</Label>
+              <Input
+                id="border-radius"
+                type="text"
+                value={theme.sizes.borderRadius}
+                onChange={(e) => handleSizeChange('borderRadius', e.target.value)}
+                placeholder="12px"
+              />
+              <p className="text-xs text-gray-500">Ex: 12px, 0.5rem, 50%</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* CSS Customizado */}
+      <Card className="border-2 border-gray-200 dark:border-gray-700 shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 shadow-md">
+              <Code className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                CSS Customizado
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Adicione efeitos especiais e estilos customizados (ex: neve no Natal)
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
+          <div className="space-y-2">
+            <Label htmlFor="custom-css">Código CSS</Label>
+            <Textarea
+              id="custom-css"
+              value={theme.customCSS}
+              onChange={(e) => handleCustomCSSChange(e.target.value)}
+              placeholder="/* Exemplo: Efeito de neve no Natal */
+@keyframes snowfall {
+  0% { transform: translateY(-100vh) rotate(0deg); }
+  100% { transform: translateY(100vh) rotate(360deg); }
+}
+
+.snowflake {
+  position: fixed;
+  top: -10px;
+  color: white;
+  font-size: 1em;
+  animation: snowfall 10s linear infinite;
+  pointer-events: none;
+}"
+              className="font-mono text-sm"
+              rows={15}
+            />
+            <p className="text-xs text-gray-500">
+              O CSS será injetado diretamente na página. Use com cuidado!
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Botão Salvar */}
+      <div className="flex justify-end">
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white shadow-lg hover:shadow-xl transition-all font-semibold px-8"
+          style={{ fontWeight: 700 }}
+        >
+          {saving ? 'Salvando...' : 'Salvar Configurações'}
+        </Button>
       </div>
     </div>
   );

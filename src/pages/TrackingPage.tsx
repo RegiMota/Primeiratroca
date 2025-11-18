@@ -22,30 +22,12 @@ import {
   AlertCircle,
   ArrowRight
 } from 'lucide-react';
+import { TrackingItem } from '../types';
 
 interface TrackingEvent {
   date: string | Date;
   location: string;
   status: string;
-}
-
-interface Tracking {
-  id: number;
-  orderId: number;
-  carrier: string;
-  trackingCode: string;
-  status: string;
-  statusDetail?: string;
-  address: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  shippedAt?: string | Date;
-  estimatedDelivery?: string | Date;
-  deliveredAt?: string | Date;
-  events?: TrackingEvent[] | string;
-  deliveryProof?: string;
-  recipientName?: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -114,8 +96,8 @@ export function TrackingPage() {
         
         // Buscar tracking para cada pedido que tem trackingCode
         const trackingsPromises = orders
-          .filter((order: any) => order.trackingCode)
-          .map(async (order: any) => {
+          .filter((order: Order) => order.trackingCode)
+          .map(async (order: Order) => {
             try {
               const trackingResponse = await shippingAPI.getTrackingByOrder(order.id);
               return trackingResponse.tracking;
@@ -444,7 +426,7 @@ export function TrackingPage() {
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {myOrdersTracking.map((trackingItem: any) => {
+                  {myOrdersTracking.map((trackingItem: TrackingItem) => {
                     const StatusIcon = STATUS_ICONS[trackingItem.status] || Package;
                     return (
                       <div

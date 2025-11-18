@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { ImageUploader } from '../components/ImageUploader';
 import { toast } from 'sonner';
 
 // Ícones disponíveis para os cards de benefícios
@@ -60,10 +61,12 @@ interface HeroSlide {
 
 interface BenefitCard {
   id: number;
-  iconName: string;
+  iconName?: string | null;
+  imageUrl?: string | null;
   mainText: string;
   subText: string;
   color?: string | null;
+  link?: string | null;
   order: number;
   isActive: boolean;
 }
@@ -92,9 +95,11 @@ export function AdminContentPage() {
   });
   const [cardFormData, setCardFormData] = useState({
     iconName: 'Send',
+    imageUrl: '',
     mainText: '',
     subText: '',
     color: '#FF6B35',
+    link: '',
     order: 0,
     isActive: true,
   });
@@ -218,9 +223,11 @@ export function AdminContentPage() {
     setEditingCard(null);
     setCardFormData({
       iconName: 'Send',
+      imageUrl: '',
       mainText: '',
       subText: '',
       color: '#FF6B35',
+      link: '',
       order: benefitCards.length,
       isActive: true,
     });
@@ -230,10 +237,12 @@ export function AdminContentPage() {
   const handleEditCard = (card: BenefitCard) => {
     setEditingCard(card);
     setCardFormData({
-      iconName: card.iconName,
+      iconName: card.iconName || 'Send',
+      imageUrl: card.imageUrl || '',
       mainText: card.mainText,
       subText: card.subText,
       color: card.color || '#FF6B35',
+      link: card.link || '',
       order: card.order,
       isActive: card.isActive,
     });
@@ -242,8 +251,9 @@ export function AdminContentPage() {
 
   const handleSaveCard = async () => {
     try {
-      if (!cardFormData.iconName || !cardFormData.mainText || !cardFormData.subText) {
-        toast.error('Ícone, texto principal e texto secundário são obrigatórios');
+      // Validar que tem ícone OU imagem
+      if ((!cardFormData.iconName && !cardFormData.imageUrl) || !cardFormData.mainText || !cardFormData.subText) {
+        toast.error('Ícone ou imagem, texto principal e texto secundário são obrigatórios');
         return;
       }
 
@@ -449,13 +459,24 @@ export function AdminContentPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {benefitCards.map((card) => {
-                const IconComponent = availableIcons.find(i => i.name === card.iconName)?.component || Send;
+                const IconComponent = card.iconName ? (availableIcons.find(i => i.name === card.iconName)?.component || Send) : null;
                 return (
                   <Card key={card.id} className={!card.isActive ? 'opacity-50' : ''}>
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                          <IconComponent className="h-6 w-6 text-gray-600" />
+                          {card.imageUrl ? (
+                            <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                              <img 
+                                src={card.imageUrl} 
+                                alt={card.mainText}
+                                className="object-contain"
+                                style={{ width: '48px', height: '48px', maxWidth: '48px', maxHeight: '48px', objectFit: 'contain' }}
+                              />
+                            </div>
+                          ) : IconComponent ? (
+                            <IconComponent className="h-6 w-6 text-gray-600 flex-shrink-0" />
+                          ) : null}
                           <div>
                             <CardTitle className="text-lg">{card.mainText}</CardTitle>
                             <CardDescription>Ordem: {card.order}</CardDescription>
@@ -636,28 +657,68 @@ export function AdminContentPage() {
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="iconName">Ícone *</Label>
-              <Select
-                value={cardFormData.iconName}
-                onValueChange={(value) => setCardFormData({ ...cardFormData, iconName: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableIcons.map((icon) => {
-                    const IconComponent = icon.component;
-                    return (
-                      <SelectItem key={icon.name} value={icon.name}>
-                        <div className="flex items-center gap-2">
-                          <IconComponent className="h-4 w-4" />
-                          {icon.name}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <Label>Ícone ou Imagem *</Label>
+              <p className="text-xs text-gray-500 mb-2">Escolha um ícone ou faça upload de uma imagem</p>
+              
+              {/* Opção de Upload de Imagem */}
+              <div className="mb-4">
+                <Label htmlFor="imageUrl" className="text-sm font-normal">Imagem (opcional)</Label>
+                {cardFormData.imageUrl ? (
+                  <div className="mt-2 relative">
+                    <img 
+                      src={cardFormData.imageUrl} 
+                      alt="Preview" 
+                      className="w-full h-32 object-contain rounded border border-gray-300 bg-gray-50"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={() => setCardFormData({ ...cardFormData, imageUrl: '', iconName: cardFormData.iconName || 'Send' })}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <ImageUploader
+                    onUpload={(base64) => {
+                      setCardFormData({ ...cardFormData, imageUrl: base64, iconName: '' });
+                    }}
+                    maxSizeMB={5}
+                    maxWidth={800}
+                    maxHeight={600}
+                  />
+                )}
+              </div>
+
+              {/* Opção de Seleção de Ícone */}
+              {!cardFormData.imageUrl && (
+                <div>
+                  <Label htmlFor="iconName">Ícone</Label>
+                  <Select
+                    value={cardFormData.iconName || 'Send'}
+                    onValueChange={(value) => setCardFormData({ ...cardFormData, iconName: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableIcons.map((icon) => {
+                        const IconComponent = icon.component;
+                        return (
+                          <SelectItem key={icon.name} value={icon.name}>
+                            <div className="flex items-center gap-2">
+                              <IconComponent className="h-4 w-4" />
+                              {icon.name}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div>
@@ -680,6 +741,19 @@ export function AdminContentPage() {
                 placeholder="Para compras acima de R$ 299"
                 required
               />
+            </div>
+
+            <div>
+              <Label htmlFor="link">Link (Opcional)</Label>
+              <Input
+                id="link"
+                value={cardFormData.link}
+                onChange={(e) => setCardFormData({ ...cardFormData, link: e.target.value })}
+                placeholder="https://exemplo.com ou /categoria/produtos"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                URL para redirecionar ao clicar no card. Pode ser um link externo ou interno (ex: /shop)
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

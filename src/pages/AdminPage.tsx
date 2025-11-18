@@ -144,7 +144,7 @@ export function AdminPage() {
     setSubmitting(true);
 
     try {
-      const productData: any = {
+      const productData: ProductData = {
         name: formData.name,
         description: formData.description,
         price: formData.price,

@@ -1,124 +1,106 @@
-import { Route, Switch } from 'wouter';
-import { Toaster } from './components/ui/sonner';
-import { CartProvider } from './contexts/CartContext';
-import { AuthProvider } from './contexts/AuthContext';
-import { NotificationProvider } from './contexts/NotificationContext';
-import { Header } from './components/Header';
-import { Footer } from './components/Footer';
-import { FloatingElements } from './components/FloatingElements';
-import { HomePage } from './pages/HomePage';
-import { ShopPage } from './pages/ShopPage';
-import { ProductDetailPage } from './pages/ProductDetailPage';
-import { CartPage } from './pages/CartPage';
-import { CheckoutPage } from './pages/CheckoutPage';
-import { CheckoutSuccessPage } from './pages/CheckoutSuccessPage';
-import { CheckoutFailurePage } from './pages/CheckoutFailurePage';
-import { CheckoutPendingPage } from './pages/CheckoutPendingPage';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
-import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { OrdersPage } from './pages/OrdersPage';
-import { TrackingPage } from './pages/TrackingPage';
-import { AddressesPage } from './pages/AddressesPage';
-import { WishlistPage } from './pages/WishlistPage';
-import { CompareProductsPage } from './pages/CompareProductsPage';
-import { TicketsPage } from './pages/TicketsPage';
-import { TicketDetailPage } from './pages/TicketDetailPage';
-import { FAQPage } from './pages/FAQPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { AboutPage } from './pages/AboutPage';
-import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
-import { TermsOfUsePage } from './pages/TermsOfUsePage';
-// Admin removido - agora em aplicação separada (admin/)
-// Para acessar admin: http://localhost:3001 (desenvolvimento)
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import NotFound from "@/pages/NotFound";
+import { Route, Switch } from "wouter";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { CustomThemeProvider } from "./components/CustomThemeProvider";
+import { AuthProvider } from "./contexts/AuthContext";
+import { CartProvider } from "./contexts/CartContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
+import { Layout } from "./components/Layout";
+import Home from "./pages/Home";
+import { ShopPage } from "./pages/ShopPage";
+import { CartPage } from "./pages/CartPage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { OrdersPage } from "./pages/OrdersPage";
+import { FAQPage } from "./pages/FAQPage";
+import { TicketsPage } from "./pages/TicketsPage";
+import { TicketDetailPage } from "./pages/TicketDetailPage";
+import { ProductDetailPage } from "./pages/ProductDetailPage";
+import { AddressesPage } from "./pages/AddressesPage";
+import { WishlistPage } from "./pages/WishlistPage";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { CompareProductsPage } from "./pages/CompareProductsPage";
+import { CheckoutPage } from "./pages/CheckoutPage";
+import { CheckoutSuccessPage } from "./pages/CheckoutSuccessPage";
+import { CheckoutFailurePage } from "./pages/CheckoutFailurePage";
+import { CheckoutPendingPage } from "./pages/CheckoutPendingPage";
+import { PaymentPage } from "./pages/PaymentPage";
+import { AboutPage } from "./pages/AboutPage";
+import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
+import { TermsOfUsePage } from "./pages/TermsOfUsePage";
+import { ExchangeReturnPolicyPage } from "./pages/ExchangeReturnPolicyPage";
+import { AdminOrdersPage } from "./pages/AdminOrdersPage";
 
-function AppLayout({ children }: { children: React.ReactNode }) {
+function Router() {
   return (
-    <div className="relative min-h-screen bg-white transition-colors overflow-x-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
-      {/* Main content - layout limpo */}
-      <div className="relative mx-auto w-full" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
-        <Header />
-        <main className="min-h-[60vh]" style={{ maxWidth: '100%', overflowX: 'hidden' }}>{children}</main>
-        <Footer />
-      </div>
-      
-      {/* Elementos Flutuantes */}
-      <FloatingElements />
-      
-      <Toaster />
-    </div>
+    <Layout>
+      <Switch>
+        <Route path={"/"} component={Home} />
+        <Route path={"/login"} component={LoginPage} />
+        <Route path={"/register"} component={RegisterPage} />
+        <Route path={"/forgot-password"} component={ForgotPasswordPage} />
+        <Route path={"/reset-password"} component={ResetPasswordPage} />
+        <Route path={"/shop"} component={ShopPage} />
+        <Route path={"/product/:id"} component={ProductDetailPage} />
+        <Route path={"/cart"} component={CartPage} />
+        <Route path={"/checkout/success"} component={CheckoutSuccessPage} />
+        <Route path={"/checkout/failure"} component={CheckoutFailurePage} />
+        <Route path={"/checkout/pending"} component={CheckoutPendingPage} />
+        <Route path={"/payment/:paymentId"} component={PaymentPage} />
+        <Route path={"/checkout"} component={CheckoutPage} />
+        <Route path={"/profile"} component={ProfilePage} />
+        <Route path={"/orders"} component={OrdersPage} />
+        <Route path={"/addresses"} component={AddressesPage} />
+        <Route path={"/wishlist"} component={WishlistPage} />
+        <Route path={"/compare"} component={CompareProductsPage} />
+        <Route path={"/faq"} component={FAQPage} />
+        <Route path={"/tickets/:id"} component={TicketDetailPage} />
+        <Route path={"/tickets"} component={TicketsPage} />
+        <Route path={"/about"} component={AboutPage} />
+        <Route path={"/privacy-policy"} component={PrivacyPolicyPage} />
+        <Route path={"/terms-of-use"} component={TermsOfUsePage} />
+        <Route path={"/exchange-return-policy"} component={ExchangeReturnPolicyPage} />
+        <Route path={"/admin/orders"} component={AdminOrdersPage} />
+        <Route path={"/404"} component={NotFound} />
+        {/* Final fallback route */}
+        <Route component={NotFound} />
+      </Switch>
+    </Layout>
   );
 }
 
-// Handler global para suprimir erros conhecidos do React Strict Mode com portais
-if (typeof window !== 'undefined') {
-  const originalError = window.console.error;
-  window.console.error = (...args: any[]) => {
-    // Suprimir erros conhecidos do React Strict Mode com portais do Radix UI
-    const errorMessage = args.join(' ');
-    if (
-      errorMessage.includes('Failed to execute \'removeChild\'') ||
-      errorMessage.includes('removeChildFromContainer') ||
-      (errorMessage.includes('NotFoundError') && errorMessage.includes('removeChild'))
-    ) {
-      // Suprimir silenciosamente - este é um bug conhecido do React Strict Mode com portais
-      return;
-    }
-    originalError.apply(window.console, args);
-  };
-}
+// NOTE: About Theme
+// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
+//   to keep consistent foreground/background color across components
+// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
 
-export default function App() {
+function App() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <CartProvider>
-          <AppLayout>
-            <Switch>
-              <Route path="/" component={HomePage} />
-              <Route path="/shop" component={ShopPage} />
-              <Route path="/product/:id" component={ProductDetailPage} />
-              <Route path="/cart" component={CartPage} />
-              <Route path="/checkout" component={CheckoutPage} />
-              <Route path="/checkout/success" component={CheckoutSuccessPage} />
-              <Route path="/checkout/failure" component={CheckoutFailurePage} />
-              <Route path="/checkout/pending" component={CheckoutPendingPage} />
-              <Route path="/login" component={LoginPage} />
-              <Route path="/register" component={RegisterPage} />
-              <Route path="/forgot-password" component={ForgotPasswordPage} />
-              <Route path="/reset-password" component={ResetPasswordPage} />
-              <Route path="/orders" component={OrdersPage} />
-              <Route path="/tracking" component={TrackingPage} />
-              <Route path="/addresses" component={AddressesPage} />
-              <Route path="/wishlist" component={WishlistPage} />
-              <Route path="/compare" component={CompareProductsPage} />
-              <Route path="/tickets" component={TicketsPage} />
-              <Route path="/tickets/:id" component={TicketDetailPage} />
-              <Route path="/faq" component={FAQPage} />
-              <Route path="/profile" component={ProfilePage} />
-              <Route path="/about" component={AboutPage} />
-              <Route path="/privacy-policy" component={PrivacyPolicyPage} />
-              <Route path="/terms-of-use" component={TermsOfUsePage} />
-              {/* Admin routes removidas - admin agora é aplicação separada */}
-              {/* Acesse: http://localhost:3001 para admin */}
-              <Route>
-                <div className="mx-auto max-w-7xl px-6 py-12 text-center">
-                  <h1 className="mb-4 text-sky-500" style={{ fontSize: '3rem', fontWeight: 900 }}>
-                    404
-                  </h1>
-                  <p className="mb-8 text-gray-600" style={{ fontSize: '1.25rem' }}>
-                    Oops! Page not found
-                  </p>
-                  <a href="/" className="text-sky-500 hover:underline" style={{ fontWeight: 700 }}>
-                    Go back home
-                  </a>
-                </div>
-              </Route>
-            </Switch>
-          </AppLayout>
-        </CartProvider>
-      </NotificationProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <ThemeProvider
+        defaultTheme="light"
+        // switchable
+      >
+        <CustomThemeProvider>
+          <AuthProvider>
+            <NotificationProvider>
+              <CartProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <Router />
+                </TooltipProvider>
+              </CartProvider>
+            </NotificationProvider>
+          </AuthProvider>
+        </CustomThemeProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
+
+export default App;

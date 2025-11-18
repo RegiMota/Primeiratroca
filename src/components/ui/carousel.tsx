@@ -1,13 +1,11 @@
-"use client";
-
 import * as React from "react";
 import useEmblaCarousel, {
   type UseEmblaCarouselType,
-} from "embla-carousel-react@8.6.0";
-import { ArrowLeft, ArrowRight } from "lucide-react@0.487.0";
+} from "embla-carousel-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
-import { cn } from "./utils";
-import { Button } from "./button";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 type CarouselApi = UseEmblaCarouselType[1];
 type UseCarouselParameters = Parameters<typeof useEmblaCarousel>;
@@ -56,7 +54,7 @@ function Carousel({
       ...opts,
       axis: orientation === "horizontal" ? "x" : "y",
     },
-    plugins,
+    plugins
   );
   const [canScrollPrev, setCanScrollPrev] = React.useState(false);
   const [canScrollNext, setCanScrollNext] = React.useState(false);
@@ -85,7 +83,7 @@ function Carousel({
         scrollNext();
       }
     },
-    [scrollPrev, scrollNext],
+    [scrollPrev, scrollNext]
   );
 
   React.useEffect(() => {
@@ -145,7 +143,7 @@ function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
         className={cn(
           "flex",
           orientation === "horizontal" ? "-ml-4" : "-mt-4 flex-col",
-          className,
+          className
         )}
         {...props}
       />
@@ -164,7 +162,7 @@ function CarouselItem({ className, ...props }: React.ComponentProps<"div">) {
       className={cn(
         "min-w-0 shrink-0 grow-0 basis-full",
         orientation === "horizontal" ? "pl-4" : "pt-4",
-        className,
+        className
       )}
       {...props}
     />
@@ -175,21 +173,9 @@ function CarouselPrevious({
   className,
   variant = "outline",
   size = "icon",
-  onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { orientation, scrollPrev, canScrollPrev } = useCarousel();
-
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    // Chamar onClick customizado se fornecido
-    if (onClick) {
-      onClick(e);
-    }
-    // Sempre chamar scrollPrev (a menos que o evento tenha sido prevenido)
-    if (!e.defaultPrevented) {
-      scrollPrev();
-    }
-  };
 
   return (
     <Button
@@ -201,10 +187,10 @@ function CarouselPrevious({
         orientation === "horizontal"
           ? "top-1/2 -left-12 -translate-y-1/2"
           : "-top-12 left-1/2 -translate-x-1/2 rotate-90",
-        className,
+        className
       )}
       disabled={!canScrollPrev}
-      onClick={handleClick}
+      onClick={scrollPrev}
       {...props}
     >
       <ArrowLeft />
@@ -217,21 +203,9 @@ function CarouselNext({
   className,
   variant = "outline",
   size = "icon",
-  onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { orientation, scrollNext, canScrollNext } = useCarousel();
-
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    // Chamar onClick customizado se fornecido
-    if (onClick) {
-      onClick(e);
-    }
-    // Sempre chamar scrollNext (a menos que o evento tenha sido prevenido)
-    if (!e.defaultPrevented) {
-      scrollNext();
-    }
-  };
 
   return (
     <Button
@@ -243,10 +217,10 @@ function CarouselNext({
         orientation === "horizontal"
           ? "top-1/2 -right-12 -translate-y-1/2"
           : "-bottom-12 left-1/2 -translate-x-1/2 rotate-90",
-        className,
+        className
       )}
       disabled={!canScrollNext}
-      onClick={handleClick}
+      onClick={scrollNext}
       {...props}
     >
       <ArrowRight />

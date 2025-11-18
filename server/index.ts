@@ -22,7 +22,6 @@ import wishlistRoutes from './routes/wishlist';
 import ticketsRoutes from './routes/tickets';
 import chatRoutes from './routes/chat';
 import faqRoutes from './routes/faq';
-import testRoutes from './routes/test';
 import { initSocketServer } from './socket';
 import { initStockJobs } from './jobs/stockJobs';
 import { initWishlistJobs } from './jobs/wishlistJobs';
@@ -73,8 +72,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json({ limit: '10mb' })); // Aumentar limite para upload de imagens base64
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' })); // Aumentar limite para upload de arquivos base64 (imagens, PDFs, áudio)
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Trust proxy para obter IP real do cliente (importante para rate limiting e auditoria)
 app.set('trust proxy', 1);
@@ -102,7 +101,6 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/tickets', ticketsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/faq', faqRoutes);
-app.use('/api/test', testRoutes);
 
 // Error handling middleware (must be after routes)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -216,11 +214,20 @@ httpServer.listen(PORT, HOST, () => {
     console.log('⚠️  Jobs Agendados: Desabilitados (defina ENABLE_JOBS=true para habilitar)');
   }
   
-  // Mercado Pago
-  if (process.env.MERCADOPAGO_ACCESS_TOKEN) {
-    console.log('✅ Mercado Pago: Configurado');
+  // Asaas
+  if (process.env.ASAAS_API_KEY) {
+    const apiKey = process.env.ASAAS_API_KEY;
+    const environment = process.env.ASAAS_ENVIRONMENT || 'sandbox';
+    
+    if (environment === 'production') {
+      console.log('✅ Asaas: Configurado (PRODUÇÃO)');
+      console.log('   💳 Pagamentos reais serão processados e cobrados');
+    } else {
+      console.log('✅ Asaas: Configurado (SANDBOX)');
+      console.log('   🧪 Modo de teste - pagamentos não serão cobrados');
+    }
   } else {
-    console.log('⚠️  Mercado Pago: Não configurado (defina MERCADOPAGO_ACCESS_TOKEN no .env)');
+    console.log('⚠️  Asaas: Não configurado (defina ASAAS_API_KEY no .env)');
   }
   
   console.log('');

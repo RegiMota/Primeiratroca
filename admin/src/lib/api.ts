@@ -259,8 +259,8 @@ export const adminAPI = {
     return response.data;
   },
 
-  updateLogo: async (logo: string) => {
-    const response = await api.put('/settings/logo', { logo });
+  updateLogo: async (logo: string, logoLink?: string, logoSize?: string) => {
+    const response = await api.put('/settings/logo', { logo, logoLink, logoSize });
     return response.data;
   },
 
@@ -539,10 +539,12 @@ export const benefitCardsAPI = {
     return response.data;
   },
   create: async (data: {
-    iconName: string;
+    iconName?: string;
+    imageUrl?: string;
     mainText: string;
     subText: string;
     color?: string;
+    link?: string;
     order?: number;
     isActive?: boolean;
   }) => {
@@ -553,9 +555,11 @@ export const benefitCardsAPI = {
   },
   update: async (id: number, data: {
     iconName?: string;
+    imageUrl?: string;
     mainText?: string;
     subText?: string;
     color?: string;
+    link?: string;
     order?: number;
     isActive?: boolean;
   }) => {
@@ -621,6 +625,18 @@ export const menusAPI = {
   },
   deleteItem: async (itemId: number) => {
     const response = await api.delete(`/admin/menu-items/${itemId}`);
+    return response.data;
+  },
+};
+
+// Theme/Styling API
+export const themeAPI = {
+  get: async () => {
+    const response = await api.get('/settings/theme');
+    return response.data;
+  },
+  update: async (theme: any) => {
+    const response = await api.put('/settings/theme', theme);
     return response.data;
   },
 };

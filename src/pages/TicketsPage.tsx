@@ -13,6 +13,7 @@ import {
 } from '../components/ui/select';
 import { Plus, MessageSquare, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { ticketsAPI } from '../lib/api';
+import { TicketSearchParams } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import {
@@ -50,7 +51,7 @@ interface Ticket {
   };
 }
 
-const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+const statusConfig: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
   open: { label: 'Aberto', color: 'bg-blue-500', icon: AlertCircle },
   in_progress: { label: 'Em Andamento', color: 'bg-yellow-500', icon: Clock },
   waiting_customer: { label: 'Aguardando Cliente', color: 'bg-orange-500', icon: Clock },
@@ -104,7 +105,7 @@ export function TicketsPage() {
   const loadTickets = async () => {
     try {
       setLoading(true);
-      const params: any = {};
+      const params: TicketSearchParams = {};
       if (statusFilter !== 'all') params.status = statusFilter;
       if (categoryFilter !== 'all') params.category = categoryFilter;
 

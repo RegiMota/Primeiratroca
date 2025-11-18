@@ -4,12 +4,14 @@ import { ProductCard } from '../components/ProductCard';
 import { FilterSidebar } from '../components/FilterSidebar';
 import { productsAPI, categoriesAPI } from '../lib/api';
 import { Product } from '../lib/mockData';
+import { ProductSearchParams } from '../types';
 import { AnalyticsEvents } from '../lib/analytics';
 import { Button } from '../components/ui/button';
 import { Filter } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -97,11 +99,54 @@ export function ShopPage() {
   // Ler parâmetros da URL quando a página carrega
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
+    
+    // Ler parâmetro de busca
     const searchParam = urlParams.get('search');
     if (searchParam && searchParam !== searchQuery) {
       setSearchQuery(searchParam);
     }
-  }, [location]);
+    
+    // Ler parâmetro de categoria
+    const categoryParam = urlParams.get('category');
+    if (categoryParam) {
+      // Verificar se a categoria existe nas categorias carregadas
+      // Primeiro tenta encontrar pelo slug, depois pelo nome
+      const category = categories.find(c => 
+        c.slug.toLowerCase() === categoryParam.toLowerCase() || 
+        c.name.toLowerCase() === categoryParam.toLowerCase()
+      );
+      if (category) {
+        // Usar o slug da categoria (o backend agora aceita slug ou name)
+        // Isso mantém consistência com a URL
+        setSelectedCategory(category.slug);
+      } else if (categories.length > 0) {
+        // Se as categorias já foram carregadas mas não encontrou, usar o parâmetro diretamente
+        // O backend agora aceita tanto slug quanto name
+        setSelectedCategory(categoryParam);
+      } else {
+        // Se as categorias ainda não foram carregadas, usar o parâmetro diretamente
+        // O useEffect será executado novamente quando as categorias carregarem
+        setSelectedCategory(categoryParam);
+      }
+    } else {
+      // Se não há parâmetro de categoria na URL, resetar para 'All'
+      setSelectedCategory('All');
+    }
+    
+    // Ler parâmetro de gênero
+    const genderParam = urlParams.get('gender');
+    // TODO: Implementar filtro de gênero se necessário
+    
+    // Ler parâmetro de featured
+    const featuredParam = urlParams.get('featured');
+    if (featuredParam === 'true') {
+      setFeaturedOnly(true);
+    }
+    
+    // Ler parâmetro de new
+    const newParam = urlParams.get('new');
+    // TODO: Implementar filtro de novidades se necessário
+  }, [location, categories]);
 
   const [sortBy, setSortBy] = useState<'createdAt' | 'price' | 'name' | 'featured'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -137,13 +182,14 @@ export function ShopPage() {
       try {
         setLoading(true);
         const offset = (currentPage - 1) * 60;
-        const params: any = {
+        const params: ProductSearchParams = {
           limit: 60, // 60 produtos por página
-          offset: offset,
+          page: currentPage,
         };
         
         // Filtro por categoria
         if (selectedCategory && selectedCategory !== 'All') {
+          // O backend agora aceita tanto slug quanto name
           params.category = selectedCategory;
         }
         
@@ -162,7 +208,7 @@ export function ShopPage() {
         if (selectedSizes.length > 0) {
           // A API aceita apenas um tamanho, então vamos filtrar por múltiplos tamanhos
           // Por enquanto, vamos usar o primeiro tamanho selecionado
-          // TODO: Melhorar backend para suportar múltiplos tamanhos
+          // NOTA: Backend pode ser melhorado no futuro para suportar múltiplos tamanhos
           params.size = selectedSizes[0];
         }
         
@@ -170,7 +216,7 @@ export function ShopPage() {
         if (selectedColors.length > 0) {
           // A API aceita apenas uma cor, então vamos filtrar por múltiplas cores
           // Por enquanto, vamos usar a primeira cor selecionada
-          // TODO: Melhorar backend para suportar múltiplas cores
+          // NOTA: Backend pode ser melhorado no futuro para suportar múltiplas cores
           params.color = selectedColors[0];
         }
         
@@ -315,6 +361,9 @@ export function ShopPage() {
             <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
               <DialogHeader>
                 <DialogTitle className="text-sky-500 text-xl font-bold text-left">Filtros Avançados</DialogTitle>
+                <DialogDescription>
+                  Use os filtros abaixo para encontrar exatamente o que procura
+                </DialogDescription>
               </DialogHeader>
               <div className="mt-4 -mx-2 sm:-mx-4 px-2 sm:px-4">
                 <FilterSidebar

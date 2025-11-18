@@ -141,6 +141,74 @@ export const validators = {
     return { isValid: true };
   },
 
+  cpf: (value: string): ValidationResult => {
+    if (!value) {
+      return { isValid: false, error: 'CPF é obrigatório' };
+    }
+    // Remove caracteres não numéricos
+    const cpfDigits = value.replace(/\D/g, '');
+    
+    // Verifica se tem 11 dígitos
+    if (cpfDigits.length !== 11) {
+      return { isValid: false, error: 'CPF deve ter 11 dígitos' };
+    }
+    
+    // Verifica se todos os dígitos são iguais (CPF inválido)
+    if (/^(\d)\1{10}$/.test(cpfDigits)) {
+      return { isValid: false, error: 'CPF inválido' };
+    }
+    
+    // Validação do dígito verificador
+    let sum = 0;
+    let remainder;
+    
+    for (let i = 1; i <= 9; i++) {
+      sum += parseInt(cpfDigits.substring(i - 1, i)) * (11 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(cpfDigits.substring(9, 10))) {
+      return { isValid: false, error: 'CPF inválido' };
+    }
+    
+    sum = 0;
+    for (let i = 1; i <= 10; i++) {
+      sum += parseInt(cpfDigits.substring(i - 1, i)) * (12 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(cpfDigits.substring(10, 11))) {
+      return { isValid: false, error: 'CPF inválido' };
+    }
+    
+    return { isValid: true };
+  },
+
+  birthDate: (value: string): ValidationResult => {
+    if (!value) {
+      return { isValid: false, error: 'Data de aniversário é obrigatória' };
+    }
+    
+    const date = new Date(value);
+    const today = new Date();
+    const minDate = new Date();
+    minDate.setFullYear(today.getFullYear() - 120); // Máximo 120 anos
+    
+    if (isNaN(date.getTime())) {
+      return { isValid: false, error: 'Data inválida' };
+    }
+    
+    if (date > today) {
+      return { isValid: false, error: 'Data de aniversário não pode ser no futuro' };
+    }
+    
+    if (date < minDate) {
+      return { isValid: false, error: 'Data de aniversário inválida' };
+    }
+    
+    return { isValid: true };
+  },
+
   url: (value: string): ValidationResult => {
     if (!value) {
       return { isValid: true }; // Optional

@@ -29,9 +29,27 @@ router.get('/', async (req, res) => {
 
     // Filtro por categoria
     if (category && category !== 'All') {
-      where.category = {
-        name: category as string,
-      };
+      // Buscar a categoria pelo slug ou name
+      const foundCategory = await prisma.category.findFirst({
+        where: {
+          OR: [
+            { name: category as string },
+            { slug: category as string },
+          ],
+        },
+      });
+      
+      if (foundCategory) {
+        where.categoryId = foundCategory.id;
+      } else {
+        // Se não encontrar a categoria, retornar array vazio
+        return res.json({
+          products: [],
+          total: 0,
+          page: 1,
+          totalPages: 0,
+        });
+      }
     }
 
     // Filtro por featured
