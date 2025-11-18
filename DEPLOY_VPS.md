@@ -85,24 +85,32 @@ POSTGRES_USER=primeiratroca
 POSTGRES_PASSWORD=SUA_SENHA_FORTE_AQUI
 POSTGRES_DB=primeiratroca
 
-# JWT
+# JWT Secret (GERE UMA CHAVE FORTE!)
+# Use: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 JWT_SECRET=SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI
 
-# API URL
+# API URL (ajuste com seu domínio)
 VITE_API_URL=https://api.seudominio.com.br
 
-# Cloudinary (opcional)
+# Node Environment
+NODE_ENV=production
+
+# Cloudinary (opcional - para upload de imagens)
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 
-# SendGrid (opcional)
+# SendGrid (opcional - para envio de emails)
 SENDGRID_API_KEY=
 SENDGRID_FROM_EMAIL=noreply@seudominio.com.br
+SENDGRID_FROM_NAME=Primeira Troca
 
-# Asaas (opcional)
+# Asaas (opcional - para pagamentos)
 ASAAS_API_KEY=
 ASAAS_ENVIRONMENT=production
+
+# Porta do servidor
+PORT=5000
 ```
 
 Salve com `Ctrl+O`, `Enter`, `Ctrl+X`.

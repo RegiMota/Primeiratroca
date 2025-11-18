@@ -39,13 +39,15 @@ services:
       SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-}
       ASAAS_API_KEY: ${ASAAS_API_KEY:-}
       ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-production}
+    ports:
+      - "5000:5000"
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - primeira-troca-network
-    command: sh -c "npx prisma generate && npx prisma migrate deploy && node server/index.js"
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npx tsx server/index.ts"
 
   # Frontend (React/Vite) - Buildado para produção
   frontend:
@@ -55,6 +57,8 @@ services:
     container_name: primeira-troca-frontend-prod
     environment:
       VITE_API_URL: ${VITE_API_URL:-https://api.seudominio.com.br}
+    ports:
+      - "8080:80"
     restart: unless-stopped
     depends_on:
       - backend
@@ -69,6 +73,8 @@ services:
     container_name: primeira-troca-admin-prod
     environment:
       VITE_API_URL: ${VITE_API_URL:-https://api.seudominio.com.br}
+    ports:
+      - "8081:80"
     restart: unless-stopped
     depends_on:
       - backend

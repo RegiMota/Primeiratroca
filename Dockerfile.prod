@@ -10,8 +10,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instalar dependências
-RUN npm ci --only=production
+# Instalar dependências (incluindo devDependencies para tsx)
+RUN npm ci
 
 # Copiar código fonte
 COPY . .
@@ -31,10 +31,11 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/tsconfig.json ./
 
 # Expor porta
 EXPOSE 5000
 
-# Comando para produção
-CMD ["node", "server/index.js"]
+# Comando para produção (usando tsx para TypeScript)
+CMD ["npx", "tsx", "server/index.ts"]
 
