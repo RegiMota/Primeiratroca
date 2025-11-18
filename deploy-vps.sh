@@ -156,6 +156,9 @@ JWT_SECRET=$JWT_SECRET
 # API URL
 VITE_API_URL=https://api.$DOMAIN
 
+# CORS Origins (domínios permitidos para requisições)
+CORS_ORIGIN=https://$DOMAIN,https://www.$DOMAIN,https://admin.$DOMAIN
+
 # Node Environment
 NODE_ENV=production
 

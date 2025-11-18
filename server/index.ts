@@ -56,14 +56,26 @@ app.use(cors({
     }
     
     // Em produção, usar apenas origens permitidas
-    const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [
+    const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || [
       'http://localhost:3000', // Site principal
       'http://localhost:3001', // Admin panel (v2.0)
       'http://localhost:3002', // Site principal (porta alternativa)
     ];
     
-    if (origin && allowedOrigins.includes(origin)) {
+    // Se não tiver origem (requisições do mesmo domínio ou curl), permitir
+    if (!origin) {
       return callback(null, true);
+    }
+    
+    // Verificar se a origem está na lista permitida
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Log para debug (apenas em desenvolvimento)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('CORS bloqueado para origem:', origin);
+      console.log('Origens permitidas:', allowedOrigins);
     }
     
     callback(new Error('Not allowed by CORS'));
