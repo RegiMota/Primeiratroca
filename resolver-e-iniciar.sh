@@ -19,14 +19,23 @@ chmod +x iniciar-todos.sh verificar-status.sh recriar-banco.sh
 echo "🚀 Iniciando todos os containers..."
 echo ""
 
-# Carregar variáveis do .env.prod
-if [ -f .env.prod ]; then
-    export $(cat .env.prod | grep -v '^#' | xargs)
-    echo "✅ Variáveis de ambiente carregadas do .env.prod"
-else
-    echo "❌ Arquivo .env.prod não encontrado!"
-    exit 1
+# Verificar e criar .env.prod se não existir
+if [ ! -f .env.prod ]; then
+    echo "⚠️  Arquivo .env.prod não encontrado!"
+    echo "📝 Criando .env.prod..."
+    if [ -f criar-env-prod.sh ]; then
+        chmod +x criar-env-prod.sh
+        ./criar-env-prod.sh
+    else
+        echo "❌ Script criar-env-prod.sh não encontrado!"
+        echo "   Execute: git pull origin main"
+        exit 1
+    fi
 fi
+
+# Carregar variáveis do .env.prod
+export $(cat .env.prod | grep -v '^#' | xargs)
+echo "✅ Variáveis de ambiente carregadas do .env.prod"
 
 # Iniciar todos os containers
 docker-compose -f docker-compose.prod.yml up -d
