@@ -294,7 +294,7 @@ docker-compose -f docker-compose.prod.yml exec -T backend npx prisma migrate dep
 
 # Criar usuário admin
 echo "Criando usuário admin..."
-docker-compose -f docker-compose.prod.yml exec -T backend node scripts/check-admin.js || true
+docker-compose -f docker-compose.prod.yml exec -T backend node scripts/create-admin.js || docker-compose -f docker-compose.prod.yml exec -T backend node scripts/check-admin.js || true
 
 # Passo 12: Obter certificados SSL
 echo -e "${YELLOW}🔒 Passo 12: Obtendo certificados SSL...${NC}"
