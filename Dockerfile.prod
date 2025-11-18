@@ -1,0 +1,40 @@
+# Dockerfile para o Backend (Servidor Node.js) - Produção
+FROM node:20-alpine AS builder
+
+# Instalar dependências do sistema
+RUN apk add --no-cache python3 make g++ openssl libc6-compat
+
+WORKDIR /app
+
+# Copiar arquivos de dependências
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Instalar dependências
+RUN npm ci --only=production
+
+# Copiar código fonte
+COPY . .
+
+# Gerar Prisma Client
+RUN npx prisma generate
+
+# Estágio de produção
+FROM node:20-alpine
+
+RUN apk add --no-cache openssl libc6-compat
+
+WORKDIR /app
+
+# Copiar apenas arquivos necessários
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/server ./server
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/package*.json ./
+
+# Expor porta
+EXPOSE 5000
+
+# Comando para produção
+CMD ["node", "server/index.js"]
+
