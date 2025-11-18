@@ -27,8 +27,8 @@ POSTGRES_DB=primeiratroca
 # JWT Secret
 JWT_SECRET=$JWT_SECRET
 
-# API URL
-VITE_API_URL=https://api.$DOMAIN
+# API URL (deve terminar com /api)
+VITE_API_URL=https://api.$DOMAIN/api
 
 # CORS Origins (domínios permitidos para requisições)
 CORS_ORIGIN=https://$DOMAIN,https://www.$DOMAIN,https://admin.$DOMAIN
