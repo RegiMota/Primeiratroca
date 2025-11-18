@@ -4,7 +4,9 @@
 cd "$(dirname "$0")"
 
 echo "🔄 Resolvendo conflitos do git..."
-git stash
+# Forçar descarte de mudanças locais e atualizar
+git reset --hard HEAD
+git clean -fd
 git pull origin main
 
 echo ""
