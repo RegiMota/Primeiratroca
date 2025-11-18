@@ -188,10 +188,14 @@ export function AdminSettingsPage() {
       </div>
 
       <Tabs defaultValue="logo" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="logo">
             <ImageIcon className="mr-2 h-4 w-4" />
             Logo
+          </TabsTrigger>
+          <TabsTrigger value="favicon">
+            <ImageIcon className="mr-2 h-4 w-4" />
+            Favicon
           </TabsTrigger>
           <TabsTrigger value="styling">
             <Palette className="mr-2 h-4 w-4" />
@@ -408,11 +412,258 @@ export function AdminSettingsPage() {
 
         </TabsContent>
 
+        <TabsContent value="favicon" className="space-y-6">
+          <FaviconSection />
+        </TabsContent>
+
         <TabsContent value="styling">
           <StylingSection />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// Componente para seção de favicon
+function FaviconSection() {
+  const [favicon, setFavicon] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadFavicon = async () => {
+      try {
+        setLoading(true);
+        const data = await adminAPI.getFavicon();
+        setFavicon(data.favicon);
+        setPreview(data.favicon);
+      } catch (error) {
+        console.error('Error loading favicon:', error);
+        toast.error('Erro ao carregar favicon');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadFavicon();
+  }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo de arquivo (favicon geralmente é .ico, mas aceitamos imagens)
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor, selecione um arquivo de imagem válido (ICO, PNG, JPG, SVG)');
+      return;
+    }
+
+    // Validar tamanho (máximo 500KB para favicon)
+    if (file.size > 500 * 1024) {
+      toast.error('O favicon deve ter no máximo 500KB');
+      return;
+    }
+
+    // Converter para base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setPreview(base64String);
+    };
+    reader.onerror = () => {
+      toast.error('Erro ao ler o arquivo');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUpload = async () => {
+    if (!preview) {
+      toast.error('Por favor, selecione uma imagem primeiro');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      await adminAPI.updateFavicon(preview);
+      setFavicon(preview);
+      
+      // Atualizar o favicon na página
+      const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
+      link.type = 'image/x-icon';
+      link.rel = 'shortcut icon';
+      link.href = preview;
+      document.getElementsByTagName('head')[0].appendChild(link);
+      
+      toast.success('Favicon atualizado com sucesso!');
+    } catch (error: any) {
+      console.error('Error uploading favicon:', error);
+      toast.error(error?.response?.data?.error || 'Erro ao atualizar favicon');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    try {
+      setUploading(true);
+      await adminAPI.updateFavicon('');
+      setFavicon(null);
+      setPreview(null);
+      
+      // Remover o favicon da página
+      const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+      if (link) {
+        link.remove();
+      }
+      
+      toast.success('Favicon removido com sucesso!');
+    } catch (error: any) {
+      console.error('Error removing favicon:', error);
+      toast.error('Erro ao remover favicon');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-600">Carregando favicon...</p>
+      </div>
+    );
+  }
+
+  return (
+    <Card className="border-2 border-gray-200 dark:border-gray-700 shadow-lg">
+      <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-purple-400 to-pink-500 shadow-md">
+            <ImageIcon className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
+              Favicon do Site
+            </CardTitle>
+            <CardDescription className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Faça upload do favicon que aparecerá na aba do navegador
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6 pt-6">
+        {/* Informações sobre formato e tamanho */}
+        <div className="rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-5 border-2 border-purple-200 dark:border-purple-800 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500 dark:bg-purple-600 flex-shrink-0 shadow-md">
+              <Settings className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1 space-y-2">
+              <p className="font-bold text-purple-900 dark:text-purple-100 text-base">
+                Especificações do Favicon
+              </p>
+              <ul className="text-sm text-purple-800 dark:text-purple-200 space-y-1.5 list-none">
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-500 font-bold mt-0.5">•</span>
+                  <span><strong>Formatos aceitos:</strong> ICO, PNG, JPG, JPEG, SVG</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-500 font-bold mt-0.5">•</span>
+                  <span><strong>Tamanho recomendado:</strong> 32x32 ou 16x16 pixels (quadrado)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-500 font-bold mt-0.5">•</span>
+                  <span><strong>Tamanho máximo:</strong> 500KB</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-500 font-bold mt-0.5">•</span>
+                  <span><strong>Formato ideal:</strong> ICO ou PNG com fundo transparente</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Preview do favicon atual */}
+        {preview && (
+          <div className="space-y-3">
+            <Label className="text-base font-semibold text-gray-900 dark:text-gray-100">
+              Preview do Favicon
+            </Label>
+            <div className="flex items-center gap-4 p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 shadow-sm">
+              <div className="flex items-center justify-center bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md border border-gray-200 dark:border-gray-700" style={{ width: '64px', height: '64px' }}>
+                <img
+                  src={preview}
+                  alt="Favicon preview"
+                  style={{ 
+                    width: '32px', 
+                    height: '32px',
+                    objectFit: 'contain'
+                  }}
+                  className="object-contain"
+                />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Esta é como o favicon aparecerá na aba do navegador
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Tamanho recomendado: 32x32 pixels
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Upload */}
+        <div className="space-y-3">
+          <Label htmlFor="favicon-upload" className="text-base font-semibold text-gray-900 dark:text-gray-100">
+            Novo Favicon
+          </Label>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <Input
+                id="favicon-upload"
+                type="file"
+                accept="image/x-icon,image/png,image/jpeg,image/jpg,image/svg+xml"
+                onChange={handleFileSelect}
+                className="cursor-pointer border-2 border-gray-300 dark:border-gray-600 hover:border-purple-400 dark:hover:border-purple-500 transition-colors"
+                disabled={uploading}
+              />
+            </div>
+            <Button
+              onClick={handleUpload}
+              disabled={uploading || !preview}
+              className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white shadow-lg hover:shadow-xl transition-all font-semibold px-6"
+              style={{ fontWeight: 700 }}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              {uploading ? 'Salvando...' : 'Salvar Favicon'}
+            </Button>
+          </div>
+          {preview && preview !== favicon ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+              ⚠️ Você tem alterações pendentes. Clique em "Salvar Favicon" para aplicar.
+            </p>
+          ) : null}
+        </div>
+
+        {/* Remover */}
+        {favicon && (
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <Button
+              onClick={handleRemove}
+              variant="outline"
+              disabled={uploading}
+              className="rounded-xl text-red-600 dark:text-red-400 border-2 border-red-300 dark:border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-700 dark:hover:text-red-300 hover:border-red-400 dark:hover:border-red-500 transition-all font-semibold"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remover Favicon
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

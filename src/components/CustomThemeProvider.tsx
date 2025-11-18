@@ -55,8 +55,30 @@ export function CustomThemeProvider({ children }: { children: React.ReactNode })
         setThemeLoaded(true); // Continuar mesmo com erro
       }
     };
+
+    const loadFavicon = async () => {
+      try {
+        const data = await settingsAPI.getFavicon();
+        if (data.favicon) {
+          // Remover favicons existentes
+          const existingLinks = document.querySelectorAll("link[rel*='icon']");
+          existingLinks.forEach(link => link.remove());
+          
+          // Criar novo link para o favicon
+          const link = document.createElement('link');
+          link.rel = 'shortcut icon';
+          link.type = 'image/x-icon';
+          link.href = data.favicon;
+          document.head.appendChild(link);
+        }
+      } catch (error) {
+        console.error('Error loading favicon:', error);
+        // Não mostrar erro para o usuário, apenas log
+      }
+    };
     
     applyTheme();
+    loadFavicon();
   }, []);
   
   return <>{children}</>;

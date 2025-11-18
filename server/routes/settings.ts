@@ -225,5 +225,86 @@ router.put('/theme', authenticate, requireAdmin, async (req: AuthRequest, res) =
   }
 });
 
+// GET favicon is public (no auth required)
+router.get('/favicon', async (req, res) => {
+  try {
+    const faviconSetting = await prisma.settings.findUnique({ 
+      where: { key: 'favicon' } 
+    });
+    
+    res.json({ 
+      favicon: faviconSetting?.value || null
+    });
+  } catch (error: any) {
+    console.error('Error fetching favicon:', error);
+    
+    // Se for erro de conexão com banco, retornar null em vez de erro 500
+    if (error.code === 'P1001' || 
+        error.code === 'P1017' ||
+        error.message?.includes('connect') || 
+        error.message?.includes('Can\'t reach database') ||
+        error.message?.includes('Connection') ||
+        error.message?.includes('ECONNREFUSED')) {
+      return res.json({ favicon: null });
+    }
+    
+    // Em caso de tabela não existir, retornar null
+    if (error.code === 'P2025' || error.message?.includes('does not exist')) {
+      return res.json({ favicon: null });
+    }
+    
+    // Para qualquer outro erro, retornar null em desenvolvimento
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+      return res.json({ favicon: null });
+    }
+    
+    res.status(500).json({ 
+      error: 'Erro ao buscar favicon', 
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// PUT favicon requires admin authentication
+router.put('/favicon', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const { favicon } = req.body;
+    
+    // Se favicon for vazio, null ou undefined, remover o favicon
+    if (!favicon || favicon === '' || favicon === null || favicon === undefined) {
+      try {
+        await prisma.settings.deleteMany({
+          where: { key: 'favicon' },
+        });
+      } catch (deleteError: any) {
+        if (deleteError.code !== 'P2025') {
+          throw deleteError;
+        }
+      }
+      return res.json({ message: 'Favicon removido com sucesso', favicon: null });
+    }
+
+    // Validate favicon URL (must be a valid URL or base64)
+    if (!favicon.startsWith('http') && !favicon.startsWith('data:image')) {
+      return res.status(400).json({ error: 'Favicon deve ser uma URL válida ou base64' });
+    }
+
+    // Upsert favicon setting
+    await prisma.settings.upsert({
+      where: { key: 'favicon' },
+      update: { value: favicon },
+      create: { key: 'favicon', value: favicon },
+    });
+
+    res.json({ 
+      message: 'Favicon atualizado com sucesso', 
+      favicon: favicon
+    });
+  } catch (error) {
+    console.error('Error updating favicon:', error);
+    res.status(500).json({ error: 'Erro ao atualizar favicon' });
+  }
+});
+
 export default router;
 

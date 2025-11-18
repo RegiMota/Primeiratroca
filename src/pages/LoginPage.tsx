@@ -148,16 +148,6 @@ export function LoginPage() {
             </p>
           </div>
         </form>
-
-        <div className="mt-6 rounded-lg bg-blue-50 p-4">
-          <p className="text-center" style={{ fontSize: '0.875rem' }}>
-            <span style={{ fontWeight: 600 }}>Contas de demonstração:</span>
-            <br />
-            Admin: admin@primeiratroca.com.br / admin
-            <br />
-            Usuário: qualquer email / qualquer senha
-          </p>
-        </div>
       </div>
     </div>
   );

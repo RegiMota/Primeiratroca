@@ -264,6 +264,16 @@ export const adminAPI = {
     return response.data;
   },
 
+  getFavicon: async () => {
+    const response = await api.get('/settings/favicon');
+    return response.data;
+  },
+
+  updateFavicon: async (favicon: string) => {
+    const response = await api.put('/settings/favicon', { favicon });
+    return response.data;
+  },
+
   // Products - Admin specific (get all for admin)
   getAllProducts: async () => {
     const response = await api.get('/admin/products');

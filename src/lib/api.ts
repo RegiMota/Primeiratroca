@@ -781,6 +781,11 @@ export const settingsAPI = {
     return response.data;
   },
 
+  getFavicon: async () => {
+    const response = await api.get('/settings/favicon');
+    return response.data;
+  },
+
   getHeroSlides: async () => {
     const response = await api.get('/settings/hero-slides');
     return response.data;
