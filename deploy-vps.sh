@@ -166,8 +166,24 @@ EOF
 # Passo 9: Configurar Nginx
 echo -e "${YELLOW}🌐 Passo 9: Configurando Nginx...${NC}"
 
+# Detectar estrutura do Nginx (RHEL-based usa conf.d, Debian-based usa sites-available)
+if [ "$PKG_MANAGER" = "yum" ] || [ "$PKG_MANAGER" = "dnf" ]; then
+    # RHEL-based (AlmaLinux, CentOS, etc.) - usa /etc/nginx/conf.d/
+    NGINX_CONFIG_DIR="/etc/nginx/conf.d"
+    FRONTEND_CONFIG="$NGINX_CONFIG_DIR/primeira-troca-frontend.conf"
+    ADMIN_CONFIG="$NGINX_CONFIG_DIR/primeira-troca-admin.conf"
+    API_CONFIG="$NGINX_CONFIG_DIR/primeira-troca-api.conf"
+else
+    # Debian-based (Ubuntu, Debian) - usa sites-available/sites-enabled
+    NGINX_CONFIG_DIR="/etc/nginx/sites-available"
+    mkdir -p /etc/nginx/sites-enabled
+    FRONTEND_CONFIG="$NGINX_CONFIG_DIR/primeira-troca-frontend"
+    ADMIN_CONFIG="$NGINX_CONFIG_DIR/primeira-troca-admin"
+    API_CONFIG="$NGINX_CONFIG_DIR/primeira-troca-api"
+fi
+
 # Frontend
-cat > /etc/nginx/sites-available/primeira-troca-frontend << EOF
+cat > $FRONTEND_CONFIG << EOF
 server {
     listen 80;
     server_name $DOMAIN www.$DOMAIN;
@@ -182,7 +198,7 @@ server {
 EOF
 
 # Admin
-cat > /etc/nginx/sites-available/primeira-troca-admin << EOF
+cat > $ADMIN_CONFIG << EOF
 server {
     listen 80;
     server_name admin.$DOMAIN;
@@ -197,7 +213,7 @@ server {
 EOF
 
 # API
-cat > /etc/nginx/sites-available/primeira-troca-api << EOF
+cat > $API_CONFIG << EOF
 upstream backend {
     server localhost:5000;
 }
@@ -222,13 +238,18 @@ server {
 }
 EOF
 
-# Habilitar sites
-ln -sf /etc/nginx/sites-available/primeira-troca-frontend /etc/nginx/sites-enabled/
-ln -sf /etc/nginx/sites-available/primeira-troca-admin /etc/nginx/sites-enabled/
-ln -sf /etc/nginx/sites-available/primeira-troca-api /etc/nginx/sites-enabled/
+# Habilitar sites (apenas para Debian-based)
+if [ "$PKG_MANAGER" = "apt" ]; then
+    ln -sf $FRONTEND_CONFIG /etc/nginx/sites-enabled/
+    ln -sf $ADMIN_CONFIG /etc/nginx/sites-enabled/
+    ln -sf $API_CONFIG /etc/nginx/sites-enabled/
+    rm -f /etc/nginx/sites-enabled/default
+fi
 
-# Remover default
-rm -f /etc/nginx/sites-enabled/default
+# Remover configuração default do RHEL-based se existir
+if [ -f /etc/nginx/conf.d/default.conf ]; then
+    mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak
+fi
 
 # Testar configuração
 nginx -t
@@ -238,14 +259,24 @@ systemctl reload nginx
 
 # Passo 10: Configurar Firewall
 echo -e "${YELLOW}🔥 Passo 10: Configurando firewall...${NC}"
-ufw allow 22/tcp 2>/dev/null || true
-ufw allow 80/tcp 2>/dev/null || true
-ufw allow 443/tcp 2>/dev/null || true
-ufw --force enable 2>/dev/null || true
+if [ "$PKG_MANAGER" = "yum" ] || [ "$PKG_MANAGER" = "dnf" ]; then
+    # RHEL-based usa firewalld
+    systemctl start firewalld 2>/dev/null || true
+    systemctl enable firewalld 2>/dev/null || true
+    firewall-cmd --permanent --add-service=ssh 2>/dev/null || true
+    firewall-cmd --permanent --add-service=http 2>/dev/null || true
+    firewall-cmd --permanent --add-service=https 2>/dev/null || true
+    firewall-cmd --reload 2>/dev/null || true
+else
+    # Debian-based usa ufw
+    ufw allow 22/tcp 2>/dev/null || true
+    ufw allow 80/tcp 2>/dev/null || true
+    ufw allow 443/tcp 2>/dev/null || true
+    ufw --force enable 2>/dev/null || true
+fi
 
 # Passo 11: Fazer deploy
 echo -e "${YELLOW}🚀 Passo 11: Fazendo deploy da aplicação...${NC}"
-chmod +x deploy.sh
 export $(cat .env.prod | grep -v '^#' | xargs)
 docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
