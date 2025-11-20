@@ -74,6 +74,21 @@ services:
     networks:
       - primeira-troca-network
 
+  # Admin Panel (React/Vite) - Modo desenvolvimento
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    container_name: primeira-troca-admin
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    networks:
+      - primeira-troca-network
+
 volumes:
   postgres_data:
 
