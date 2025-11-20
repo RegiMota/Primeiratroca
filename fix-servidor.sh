@@ -55,30 +55,39 @@ fi
 
 echo ""
 echo "📋 Passo 5: Verificando e corrigindo credenciais do banco..."
-docker-compose exec -T postgres psql -U postgres <<EOF
--- Verificar se usuário existe
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'primeiratroca') THEN
-        CREATE USER primeiratroca WITH PASSWORD 'primeiratroca123';
-        ALTER USER primeiratroca CREATEDB;
-        RAISE NOTICE 'Usuário primeiratroca criado';
-    ELSE
-        ALTER USER primeiratroca WITH PASSWORD 'primeiratroca123';
-        RAISE NOTICE 'Senha do usuário primeiratroca atualizada';
-    END IF;
-END
-\$\$;
+# O banco foi criado com usuário primeiratroca como superusuário
+# Vamos apenas garantir que a senha está correta e permissões estão OK
+docker-compose exec -T postgres psql -U primeiratroca -d primeiratroca <<EOF
+-- Verificar se conseguimos conectar
+SELECT 'Conexão OK' as status;
 
--- Verificar se banco existe
-SELECT 'CREATE DATABASE primeiratroca OWNER primeiratroca'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'primeiratroca')\gexec
+-- Garantir que temos todas as permissões
+GRANT ALL PRIVILEGES ON DATABASE primeiratroca TO primeiratroca;
 
--- Dar permissões
+-- Verificar usuário atual
+SELECT current_user, current_database();
+
+\q
+EOF
+
+# Se o comando acima funcionou, está tudo OK
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Credenciais estão corretas${NC}"
+else
+    echo -e "${YELLOW}⚠️  Tentando corrigir credenciais...${NC}"
+    # Tentar criar usuário postgres se não existir e depois usar
+    docker-compose exec -T postgres psql -U primeiratroca -d postgres <<EOF 2>/dev/null
+CREATE USER postgres WITH SUPERUSER PASSWORD 'primeiratroca123';
+\q
+EOF
+    # Agora tentar com postgres
+    docker-compose exec -T postgres psql -U postgres <<EOF 2>/dev/null
+ALTER USER primeiratroca WITH PASSWORD 'primeiratroca123';
 GRANT ALL PRIVILEGES ON DATABASE primeiratroca TO primeiratroca;
 \q
 EOF
-check_success "Credenciais verificadas/corrigidas"
+    check_success "Credenciais verificadas/corrigidas"
+fi
 
 echo ""
 echo "📋 Passo 6: Removendo container do backend antigo..."
