@@ -48,7 +48,7 @@ services:
         condition: service_healthy
     networks:
       - primeira-troca-network
-    command: sh -c "npx prisma generate && npx prisma db push && npm run dev:server"
+    command: sh -c "sleep 10 && npx prisma generate && sleep 5 && npx prisma db push --accept-data-loss && npm run dev:server"
 
   # Frontend (React/Vite) - Modo desenvolvimento
   frontend:
