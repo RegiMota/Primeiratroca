@@ -18,13 +18,27 @@ if (!ASAAS_API_KEY) {
 // Criar cliente HTTP para Asaas
 const createAsaasClient = () => {
   if (!ASAAS_API_KEY) {
+    console.error('❌ ASAAS_API_KEY não configurado!');
     return null;
   }
+  
+  // Log para debug (apenas primeiros e últimos caracteres por segurança)
+  const keyPreview = ASAAS_API_KEY.length > 20 
+    ? `${ASAAS_API_KEY.substring(0, 15)}...${ASAAS_API_KEY.substring(ASAAS_API_KEY.length - 10)}`
+    : 'INCOMPLETA';
+  
+  console.log('🔑 Criando cliente Asaas:', {
+    environment: ASAAS_ENVIRONMENT,
+    baseURL: ASAAS_BASE_URL,
+    keyLength: ASAAS_API_KEY.length,
+    keyPreview: keyPreview,
+    keyStartsWith: ASAAS_API_KEY.substring(0, 10),
+  });
   
   return axios.create({
     baseURL: ASAAS_BASE_URL,
     headers: {
-      'access_token': ASAAS_API_KEY,
+      'access_token': ASAAS_API_KEY.trim(), // Remover espaços se houver
       'Content-Type': 'application/json',
     },
     timeout: 30000,
