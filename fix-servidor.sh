@@ -54,39 +54,16 @@ else
 fi
 
 echo ""
-echo "📋 Passo 5: Verificando e corrigindo credenciais do banco..."
+echo "📋 Passo 5: Verificando credenciais do banco..."
 # O banco foi criado com usuário primeiratroca como superusuário
-# Vamos apenas garantir que a senha está correta e permissões estão OK
-docker-compose exec -T postgres psql -U primeiratroca -d primeiratroca <<EOF
--- Verificar se conseguimos conectar
-SELECT 'Conexão OK' as status;
-
--- Garantir que temos todas as permissões
-GRANT ALL PRIVILEGES ON DATABASE primeiratroca TO primeiratroca;
-
--- Verificar usuário atual
-SELECT current_user, current_database();
-
-\q
-EOF
-
-# Se o comando acima funcionou, está tudo OK
+# Vamos apenas verificar se conseguimos conectar
+docker-compose exec -T postgres psql -U primeiratroca -d primeiratroca -c "SELECT current_user, current_database();" > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Credenciais estão corretas${NC}"
+    echo -e "${GREEN}✅ Conexão com banco OK - credenciais estão corretas${NC}"
+    # Garantir permissões
+    docker-compose exec -T postgres psql -U primeiratroca -d primeiratroca -c "GRANT ALL PRIVILEGES ON DATABASE primeiratroca TO primeiratroca;" > /dev/null 2>&1
 else
-    echo -e "${YELLOW}⚠️  Tentando corrigir credenciais...${NC}"
-    # Tentar criar usuário postgres se não existir e depois usar
-    docker-compose exec -T postgres psql -U primeiratroca -d postgres <<EOF 2>/dev/null
-CREATE USER postgres WITH SUPERUSER PASSWORD 'primeiratroca123';
-\q
-EOF
-    # Agora tentar com postgres
-    docker-compose exec -T postgres psql -U postgres <<EOF 2>/dev/null
-ALTER USER primeiratroca WITH PASSWORD 'primeiratroca123';
-GRANT ALL PRIVILEGES ON DATABASE primeiratroca TO primeiratroca;
-\q
-EOF
-    check_success "Credenciais verificadas/corrigidas"
+    echo -e "${YELLOW}⚠️  Não foi possível verificar credenciais, mas continuando...${NC}"
 fi
 
 echo ""
