@@ -12,12 +12,12 @@ echo "✅ Backup criado"
 echo ""
 
 # Corrigir frontend - adicionar rota /api/ e corrigir porta
+# NOTA: Não criar upstream aqui, já existe no primeira-troca-api.conf
+# Usar localhost:5000 diretamente para evitar duplicação
 echo "📝 Corrigindo configuração do frontend..."
 cat > /etc/nginx/conf.d/primeira-troca-frontend.conf <<'EOF'
-# Upstream para o backend
-upstream backend {
-    server localhost:5000;
-}
+# Upstream já definido em primeira-troca-api.conf
+# Usando localhost:5000 diretamente para evitar duplicação
 
 server {
     server_name primeiratrocaecia.com.br www.primeiratrocaecia.com.br;
@@ -25,7 +25,7 @@ server {
     
     # API e Webhook - IMPORTANTE: Deve vir ANTES da rota /
     location /api/ {
-        proxy_pass http://backend;
+        proxy_pass http://localhost:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -38,7 +38,7 @@ server {
     
     # WebSocket
     location /socket.io/ {
-        proxy_pass http://backend;
+        proxy_pass http://localhost:5000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
