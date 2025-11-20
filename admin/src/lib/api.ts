@@ -312,7 +312,9 @@ export const adminAPI = {
   // Payments (v2.0)
   getPayments: async (params?: { status?: string; gateway?: string; page?: number; limit?: number }) => {
     const response = await api.get('/admin/payments', { params });
-    return response.data;
+    // A API retorna { payments: [...], pagination: {...} }
+    // Retornar apenas o array de pagamentos para compatibilidade com o frontend
+    return response.data.payments || response.data || [];
   },
 
   getPaymentById: async (id: number) => {
