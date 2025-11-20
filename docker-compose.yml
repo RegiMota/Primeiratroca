@@ -27,16 +27,23 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: primeira-troca-backend
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql://primeiratroca:primeiratroca123@postgres:5432/primeiratroca?schema=public
-      JWT_SECRET: sua_chave_secreta_aqui_mude_em_producao
-      PORT: 5000
-      NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-postgresql://primeiratroca:primeiratroca123@postgres:5432/primeiratroca?schema=public}
+      JWT_SECRET: ${JWT_SECRET:-sua_chave_secreta_aqui_mude_em_producao}
+      PORT: ${PORT:-5000}
+      NODE_ENV: ${NODE_ENV:-development}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-production}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      SOCKET_IO_ENABLED: ${SOCKET_IO_ENABLED:-false}
+      WEBSOCKET_CORS_ORIGIN: ${WEBSOCKET_CORS_ORIGIN:-}
       # Adicione outras variáveis de ambiente conforme necessário
-      # CLOUDINARY_CLOUD_NAME: 
-      # CLOUDINARY_API_KEY: 
-      # CLOUDINARY_API_SECRET: 
-      # SENDGRID_API_KEY: 
+      # CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      # CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      # CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      # SENDGRID_API_KEY: ${SENDGRID_API_KEY:-} 
     ports:
       - "5000:5000"
     volumes:
