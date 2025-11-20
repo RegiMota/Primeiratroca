@@ -79,9 +79,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.admin
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
     container_name: primeira-troca-admin
     environment:
-      VITE_API_URL: http://localhost:5000/api
+      VITE_API_URL: ${VITE_API_URL:-}
     ports:
       - "8081:80"
     depends_on:

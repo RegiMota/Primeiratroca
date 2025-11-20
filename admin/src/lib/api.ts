@@ -54,7 +54,29 @@ interface StockVariantData {
   reservedStock?: number | string;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Detectar automaticamente a URL da API
+const getAPIUrl = () => {
+  // Se houver variável de ambiente, usar ela diretamente
+  if (import.meta.env.VITE_API_URL) {
+    let apiUrl = import.meta.env.VITE_API_URL;
+    // Garantir que termine com /api
+    if (!apiUrl.endsWith('/api')) {
+      apiUrl = apiUrl.replace(/\/$/, '') + '/api';
+    }
+    return apiUrl;
+  }
+  
+  // Se estiver em HTTPS (produção), usar caminho relativo /api (mesmo domínio via Nginx)
+  // Isso evita Mixed Content (HTTPS tentando carregar HTTP)
+  if (window.location.protocol === 'https:') {
+    return '/api';
+  }
+  
+  // Para desenvolvimento local, usar localhost
+  return 'http://localhost:5000/api';
+};
+
+const API_URL = getAPIUrl();
 
 const api = axios.create({
   baseURL: API_URL,

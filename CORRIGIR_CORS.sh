@@ -25,13 +25,13 @@ echo ""
 if grep -q "^CORS_ORIGIN" .env; then
     echo "📝 Atualizando CORS_ORIGIN existente..."
     # Atualizar linha existente
-    sed -i 's|^CORS_ORIGIN=.*|CORS_ORIGIN=https://primeiratrocaecia.com.br,https://www.primeiratrocaecia.com.br|' .env
+    sed -i 's|^CORS_ORIGIN=.*|CORS_ORIGIN=https://primeiratrocaecia.com.br,https://www.primeiratrocaecia.com.br,https://admin.primeiratrocaecia.com.br|' .env
 else
     echo "📝 Adicionando CORS_ORIGIN..."
     # Adicionar no final do arquivo
     echo "" >> .env
     echo "# CORS - Origens permitidas" >> .env
-    echo "CORS_ORIGIN=https://primeiratrocaecia.com.br,https://www.primeiratrocaecia.com.br" >> .env
+    echo "CORS_ORIGIN=https://primeiratrocaecia.com.br,https://www.primeiratrocaecia.com.br,https://admin.primeiratrocaecia.com.br" >> .env
 fi
 
 echo "✅ CORS_ORIGIN configurado"
