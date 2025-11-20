@@ -15,16 +15,25 @@ export const getServerUrl = (port: string = '5000', path: string = '') => {
     return `${baseUrl}${path}`;
   }
   
-  // Detectar o hostname atual (localhost ou IP da rede)
+  // Detectar o protocolo atual (http ou https)
+  const protocol = window.location.protocol; // 'http:' ou 'https:'
   const hostname = window.location.hostname;
   
-  // Se for localhost ou 127.0.0.1, usar localhost
+  // Se for localhost ou 127.0.0.1, usar http (desenvolvimento local)
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return `http://localhost:${port}${path}`;
   }
   
-  // Caso contrário, usar o mesmo hostname (IP da rede local)
-  return `http://${hostname}:${port}${path}`;
+  // Para produção, usar o mesmo protocolo da página atual (HTTPS se o site estiver em HTTPS)
+  // Se estiver em HTTPS, usar caminho relativo (Nginx faz o proxy)
+  if (protocol === 'https:') {
+    // Em produção com HTTPS, a API está no mesmo domínio via Nginx
+    // Retornar caminho relativo para evitar Mixed Content
+    return path;
+  }
+  
+  // Caso contrário, usar o mesmo hostname e protocolo (HTTP)
+  return `${protocol}//${hostname}:${port}${path}`;
 };
 
 // Detectar automaticamente a URL da API baseado no hostname atual
@@ -39,6 +48,13 @@ const getAPIUrl = () => {
     return apiUrl;
   }
   
+  // Se estiver em HTTPS (produção), usar caminho relativo /api (mesmo domínio via Nginx)
+  // Isso evita Mixed Content (HTTPS tentando carregar HTTP)
+  if (window.location.protocol === 'https:') {
+    return '/api';
+  }
+  
+  // Para desenvolvimento local, usar a porta 5000
   return getServerUrl('5000', '/api');
 };
 
