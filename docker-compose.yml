@@ -39,6 +39,8 @@ services:
       ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
       SOCKET_IO_ENABLED: ${SOCKET_IO_ENABLED:-false}
       WEBSOCKET_CORS_ORIGIN: ${WEBSOCKET_CORS_ORIGIN:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      RECAPTCHA_ENABLED: ${RECAPTCHA_ENABLED:-false}
       # Adicione outras variáveis de ambiente conforme necessário
       # CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
       # CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
