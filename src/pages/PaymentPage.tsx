@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { useAuth } from '../contexts/AuthContext';
 import { paymentsAPI } from '../lib/api';
@@ -8,6 +8,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { QrCode, Copy, CheckCircle2, XCircle, Loader2, ArrowLeft, Clock } from 'lucide-react';
+import { io, Socket } from 'socket.io-client';
 
 export function PaymentPage() {
   const [, params] = useRoute('/payment/:paymentId');
@@ -25,6 +26,7 @@ export function PaymentPage() {
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [orderId, setOrderId] = useState<number | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   // Carregar dados do pagamento
   useEffect(() => {
@@ -187,7 +189,75 @@ export function PaymentPage() {
     return () => clearInterval(interval);
   }, [pixExpiresAt, paymentStatus]);
 
-  // Verificar status do pagamento automaticamente
+  // Conectar ao WebSocket para receber atualizações em tempo real
+  useEffect(() => {
+    if (!paymentId || !isAuthenticated || paymentStatus !== 'pending') {
+      return;
+    }
+
+    const socketEnabled = import.meta.env.VITE_SOCKET_IO_ENABLED === 'true';
+    
+    if (socketEnabled) {
+      const getSocketUrl = async () => {
+        if (import.meta.env.VITE_SOCKET_IO_URL) {
+          return import.meta.env.VITE_SOCKET_IO_URL;
+        }
+        const { getServerUrl } = await import('../lib/api');
+        return getServerUrl('5000');
+      };
+
+      getSocketUrl().then(socketUrl => {
+        try {
+          const socket = io(socketUrl, {
+            transports: ['websocket', 'polling'],
+          });
+
+          socket.on('connect', () => {
+            console.log('✅ Conectado ao WebSocket para atualizações de pagamento');
+            // Se tiver userId, entrar na sala do usuário
+            if (isAuthenticated) {
+              socket.emit('subscribe', (window as any).__USER_ID__ || 0);
+            }
+          });
+
+          // Escutar atualizações de pagamento
+          socket.on('payment:updated', (data: { paymentId: number; status: string; orderId?: number }) => {
+            if (data.paymentId === paymentId) {
+              console.log('📬 Atualização de pagamento recebida via WebSocket:', data);
+              setPaymentStatus(data.status as any);
+              
+              if (data.status === 'approved') {
+                localStorage.removeItem('pixPaymentId');
+                toast.success('Pagamento PIX confirmado! 🎉');
+                setTimeout(() => {
+                  setLocation('/checkout/success');
+                }, 2000);
+              } else if (data.status === 'rejected' || data.status === 'cancelled') {
+                localStorage.removeItem('pixPaymentId');
+                toast.error('Pagamento PIX não foi aprovado');
+                setTimeout(() => {
+                  setLocation('/checkout/failure');
+                }, 2000);
+              }
+            }
+          });
+
+          socketRef.current = socket;
+
+          return () => {
+            socket.disconnect();
+            socketRef.current = null;
+          };
+        } catch (error) {
+          console.error('Erro ao conectar WebSocket:', error);
+        }
+      }).catch(error => {
+        console.error('Erro ao obter URL do WebSocket:', error);
+      });
+    }
+  }, [paymentId, isAuthenticated, paymentStatus, setLocation]);
+
+  // Verificar status do pagamento automaticamente (polling como fallback)
   useEffect(() => {
     if (!paymentId || paymentStatus !== 'pending' || authLoading) {
       return;
@@ -223,7 +293,7 @@ export function PaymentPage() {
     // Verificar imediatamente
     checkPaymentStatus();
 
-    // Verificar a cada 5 segundos
+    // Verificar a cada 5 segundos (polling como fallback se WebSocket não estiver disponível)
     const checkInterval = setInterval(checkPaymentStatus, 5000);
 
     // Parar após 5 minutos (tempo máximo de expiração do PIX)
@@ -235,6 +305,10 @@ export function PaymentPage() {
     return () => {
       clearInterval(checkInterval);
       clearTimeout(timeout);
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
   }, [paymentId, paymentStatus, authLoading, setLocation]);
 

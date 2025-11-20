@@ -790,9 +790,17 @@ export class AsaasService {
         };
       }
 
-      // O Asaas envia webhooks com evento e payment
-      const event = webhookData.event || webhookData.action;
+      // O Asaas envia webhooks em diferentes formatos dependendo do evento
+      // Formato 1: { event: 'PAYMENT_RECEIVED', payment: { ... } }
+      // Formato 2: { action: 'PAYMENT_RECEIVED', payment: { ... } }
+      // Formato 3: { ... } (dados do pagamento diretamente)
+      const event = webhookData.event || webhookData.action || webhookData.type;
       const paymentData = webhookData.payment || webhookData;
+      
+      // Log do evento recebido
+      if (event) {
+        console.log(`📋 Evento recebido: ${event}`);
+      }
 
       console.log('📦 Dados do webhook processados:', {
         event,
@@ -866,9 +874,23 @@ export class AsaasService {
         console.log('✅ Pagamento encontrado:', payment.id);
       }
 
-      // Mapear status
+      // Mapear status do Asaas para nosso sistema
       const status = this.mapAsaasStatusToOurStatus(paymentData.status);
       const statusDetail = paymentData.status || 'Status atualizado via webhook do Asaas';
+      
+      // Log detalhado do status
+      console.log(`🔄 Mapeamento de status:`, {
+        asaasStatus: paymentData.status,
+        nossoStatus: status,
+        evento: event,
+        paymentId: payment.id,
+      });
+      
+      // Se o status não mudou, não precisa atualizar
+      if (payment.status === status) {
+        console.log(`ℹ️ Status do pagamento ${payment.id} já está como "${status}". Nenhuma atualização necessária.`);
+        return { success: true };
+      }
 
       console.log('🔄 Atualizando status do pagamento:', {
         paymentId: payment.id,
@@ -901,7 +923,7 @@ export class AsaasService {
         console.log('✅ Status do pagamento atualizado com sucesso via PaymentService');
       }
 
-      // Se pagamento aprovado, atualizar pedido e marcar notificações de pagamento como lidas
+      // Se pagamento aprovado, atualizar pedido e criar notificação
       if (status === 'approved' && payment.order) {
         await prisma.order.update({
           where: { id: payment.order.id },
@@ -909,6 +931,43 @@ export class AsaasService {
             status: 'confirmed',
           },
         });
+        
+        // Criar notificação de pagamento aprovado
+        try {
+          const { NotificationService } = await import('./NotificationService');
+          await NotificationService.createNotification(
+            payment.order.userId,
+            'payment',
+            'Pagamento Confirmado! 🎉',
+            `Seu pagamento de R$ ${Number(payment.amount).toFixed(2).replace('.', ',')} foi confirmado com sucesso.`,
+            {
+              paymentId: payment.id,
+              orderId: payment.order.id,
+              amount: Number(payment.amount),
+            }
+          );
+        } catch (notifError) {
+          console.error('Error creating payment notification:', notifError);
+          // Não falhar se não conseguir criar notificação
+        }
+        
+        // Emitir evento WebSocket para atualização em tempo real
+        try {
+          const { getSocketServer } = await import('../socket');
+          const io = getSocketServer();
+          if (io) {
+            // Emitir para o usuário específico
+            io.to(`user:${payment.order.userId}`).emit('payment:updated', {
+              paymentId: payment.id,
+              status: 'approved',
+              orderId: payment.order.id,
+            });
+            console.log(`📤 Evento de pagamento aprovado enviado via WebSocket para usuário ${payment.order.userId}`);
+          }
+        } catch (socketError) {
+          console.error('Error emitting payment update via WebSocket:', socketError);
+          // Não falhar se WebSocket não estiver disponível
+        }
         
         // Marcar notificações de pagamento pendente como lidas
         try {
@@ -921,12 +980,12 @@ export class AsaasService {
             },
           });
           
-          // Filtrar notificações que correspondem a este pagamento
+          // Filtrar notificações que correspondem a este pagamento (exceto a nova)
           const matchingNotifications = notifications.filter((notif) => {
             if (!notif.data) return false;
             try {
               const data = JSON.parse(notif.data);
-              return data.paymentId === payment.id;
+              return data.paymentId === payment.id && notif.message.includes('pendente');
             } catch {
               return false;
             }

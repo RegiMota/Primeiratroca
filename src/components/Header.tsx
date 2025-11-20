@@ -299,7 +299,7 @@ export function Header() {
       <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm transition-colors">
         <div className="mx-auto max-w-7xl px-4 lg:px-6">
           {/* Logo Centralizada no Topo */}
-          <div className="flex justify-center py-3 md:py-4">
+          <div className="flex justify-center pb-0">
             <button
               onClick={() => {
                 // Verificar se é link externo ou interno

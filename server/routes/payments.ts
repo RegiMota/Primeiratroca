@@ -974,9 +974,31 @@ router.post('/webhook/:gateway', express.json(), async (req, res) => {
   try {
     const { gateway } = req.params;
     
+    // Log detalhado para debug
     console.log(`🔔 Webhook recebido do gateway: ${gateway}`);
-    console.log('📦 Headers:', req.headers);
+    console.log('📦 Headers:', JSON.stringify(req.headers, null, 2));
     console.log('📦 Body:', JSON.stringify(req.body, null, 2));
+    console.log('📦 IP de origem:', req.ip || req.connection.remoteAddress);
+
+    // Validação básica de segurança para Asaas
+    if (gateway === 'asaas') {
+      // Verificar token de autenticação se configurado
+      const webhookToken = process.env.ASAAS_WEBHOOK_TOKEN;
+      if (webhookToken) {
+        const authToken = req.headers['asaas-access-token'] || req.headers['x-asaas-token'] || req.body?.token;
+        if (authToken !== webhookToken) {
+          console.warn('⚠️ Token de autenticação inválido ou ausente');
+          return res.status(401).json({ error: 'Token de autenticação inválido' });
+        }
+        console.log('✅ Token de autenticação validado');
+      }
+
+      // Validar que o body tem estrutura esperada
+      if (!req.body || (typeof req.body !== 'object')) {
+        console.error('❌ Body inválido ou vazio');
+        return res.status(400).json({ error: 'Body inválido' });
+      }
+    }
 
     // Processar webhook via PaymentService
     const { PaymentService } = await import('../services/PaymentService');
@@ -987,7 +1009,14 @@ router.post('/webhook/:gateway', express.json(), async (req, res) => {
 
     if (!result.success) {
       console.error('❌ Erro ao processar webhook:', result.error);
-      return res.status(400).json({ error: result.error });
+      // Retornar 200 para evitar retentativas desnecessárias do Asaas em alguns casos
+      // Mas logar o erro para investigação
+      return res.status(200).json({ 
+        received: true, 
+        success: false, 
+        error: result.error,
+        message: 'Webhook recebido mas houve erro no processamento. Verifique os logs.'
+      });
     }
 
     console.log('✅ Webhook processado com sucesso');
@@ -995,8 +1024,24 @@ router.post('/webhook/:gateway', express.json(), async (req, res) => {
   } catch (error: any) {
     console.error('❌ Erro ao processar webhook:', error);
     console.error('Stack:', error.stack);
-    res.status(500).json({ error: 'Erro ao processar webhook', message: error.message });
+    // Retornar 200 para evitar retentativas excessivas do Asaas
+    res.status(200).json({ 
+      received: true, 
+      success: false, 
+      error: 'Erro ao processar webhook', 
+      message: error.message 
+    });
   }
+});
+
+// GET /api/payments/webhook/health - Health check para webhook
+router.get('/webhook/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    gateway: 'asaas',
+    webhookUrl: '/api/payments/webhook/asaas'
+  });
 });
 
 export default router;

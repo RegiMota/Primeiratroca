@@ -1068,8 +1068,8 @@ function TestimonialsSection() {
 // Seção de Estatísticas
 function StatsSection() {
   const stats = [
-    { value: '10k+', label: 'Clientes Satisfeitos', icon: Users, gradient: 'from-blue-400 to-cyan-400' },
-    { value: '5k+', label: 'Produtos Disponíveis', icon: ShoppingBag, gradient: 'from-purple-400 to-pink-400' },
+    { value: '500+', label: 'Clientes Satisfeitos', icon: Users, gradient: 'from-blue-400 to-cyan-400' },
+    { value: '150+', label: 'Produtos Disponíveis', icon: ShoppingBag, gradient: 'from-purple-400 to-pink-400' },
     { value: '98%', label: 'Avaliação Positiva', icon: Star, gradient: 'from-amber-400 to-orange-400' },
     { value: '24/7', label: 'Suporte Disponível', icon: Headphones, gradient: 'from-green-400 to-emerald-400' },
   ];

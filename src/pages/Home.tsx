@@ -365,36 +365,36 @@ export default function Home() {
 
       {/* Faixa de Benefícios */}
       <section className="bg-gray-800 py-4 px-4">
-        <div className="container mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+        <div className="container mx-auto max-w-7xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 justify-items-center md:justify-items-start">
             {/* Site Confiável */}
-            <div className="flex items-center gap-4 text-white">
+            <div className="flex items-center gap-4 text-white justify-center md:justify-start w-full max-w-xs">
               <div className="magic-icon-container flex-shrink-0 cursor-pointer">
                 <Lock className="magic-icon h-8 w-8 md:h-10 md:w-10" style={{ color: '#46d392' }} />
               </div>
-              <div>
+              <div className="text-center md:text-left">
                 <p className="font-semibold text-sm md:text-base">Site Confiável</p>
                 <p className="text-xs md:text-sm text-gray-300">100% Seguro</p>
               </div>
             </div>
 
             {/* Troca Grátis */}
-            <div className="flex items-center gap-4 text-white">
+            <div className="flex items-center gap-4 text-white justify-center md:justify-start w-full max-w-xs">
               <div className="magic-icon-container flex-shrink-0 cursor-pointer">
                 <ArrowLeftRight className="magic-icon h-8 w-8 md:h-10 md:w-10" style={{ color: '#46d392' }} />
               </div>
-              <div>
+              <div className="text-center md:text-left">
                 <p className="font-semibold text-sm md:text-base">Troca grátis</p>
                 <p className="text-xs md:text-sm text-gray-300">Na primeira compra</p>
               </div>
             </div>
 
             {/* Parcele sem juros */}
-            <div className="flex items-center gap-4 text-white">
+            <div className="flex items-center gap-4 text-white justify-center md:justify-start w-full max-w-xs">
               <div className="magic-icon-container flex-shrink-0 cursor-pointer">
                 <CreditCard className="magic-icon h-8 w-8 md:h-10 md:w-10" style={{ color: '#46d392' }} />
               </div>
-              <div>
+              <div className="text-center md:text-left">
                 <p className="font-semibold text-sm md:text-base">Parcele sem juros</p>
                 <p className="text-xs md:text-sm text-gray-300">Em até 3x</p>
               </div>
@@ -405,23 +405,23 @@ export default function Home() {
 
       {/* Seção de Guia do Enxoval - Benefit Cards */}
       <section className="py-12 px-4 bg-white">
-        <div className="container mx-auto">
-          <div className="text-center mb-10">
-            <h3 className="text-3xl font-bold text-gray-800 mb-2">Guia do Enxoval</h3>
-            <p className="text-gray-600">Tudo que o seu bebê precisa, do RN ao 12 meses</p>
+        <div className="container mx-auto max-w-7xl">
+          <div className="text-center mb-10 px-4">
+            <h3 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">ESCOLHA SEU TAMANHO</h3>
+            <p className="text-sm sm:text-base text-gray-600">Tudo que o seu bebê precisa, do RN ao 12 meses</p>
           </div>
 
           {loadingBenefitCards ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 justify-items-center max-w-4xl mx-auto">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="p-6 rounded-lg bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse">
+                <div key={i} className="p-6 rounded-lg bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse w-full max-w-[200px]">
                   <div className="h-12 w-12 bg-gray-400 rounded-full mx-auto mb-4"></div>
                   <div className="h-4 bg-gray-400 rounded w-3/4 mx-auto"></div>
                 </div>
               ))}
             </div>
           ) : benefitCards.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 justify-items-center max-w-4xl mx-auto">
               {benefitCards.map((card) => {
                 const IconComponent = card.iconName ? (iconMap[card.iconName] || Package) : null;
                 // Cores padrão caso não tenha cor definida
@@ -488,7 +488,7 @@ export default function Home() {
               })}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 justify-items-center max-w-4xl mx-auto">
               {[
                 { name: "Acessórios", icon: "👕", color: "from-pink-300 to-pink-400" },
                 { name: "Bodies e Macacões", icon: "🧸", color: "from-yellow-300 to-yellow-400" },
@@ -498,10 +498,10 @@ export default function Home() {
                 <button
                   key={category.name}
                   onClick={() => setLocation('/shop')}
-                  className={`p-6 rounded-lg bg-gradient-to-br ${category.color} hover:shadow-xl transition text-center transform hover:scale-105`}
+                  className={`p-6 rounded-lg bg-gradient-to-br ${category.color} hover:shadow-xl transition text-center transform hover:scale-105 w-full max-w-[200px]`}
                 >
                   <div className="text-4xl mb-2">{category.icon}</div>
-                  <p className="font-semibold text-gray-800">{category.name}</p>
+                  <p className="font-semibold text-gray-800 text-sm">{category.name}</p>
                 </button>
               ))}
             </div>
@@ -839,8 +839,8 @@ export default function Home() {
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              { icon: Users, number: "10k+", label: "Clientes Satisfeitos", delay: 0 },
-              { icon: Package, number: "5k+", label: "Produtos Disponíveis", delay: 200 },
+              { icon: Users, number: "500+", label: "Clientes Satisfeitos", delay: 0 },
+              { icon: Package, number: "150+", label: "Produtos Disponíveis", delay: 200 },
               { icon: Star, number: "98%", label: "Avaliação Positiva", delay: 400 },
               { icon: Headphones, number: "24/7", label: "Suporte Disponível", delay: 600 },
             ].map((stat, idx) => {

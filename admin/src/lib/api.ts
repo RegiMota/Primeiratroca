@@ -223,7 +223,8 @@ export const adminAPI = {
   },
 
   updateUser: async (id: number, data: Partial<UserData>) => {
-    const response = await api.patch(`/admin/users/${id}`, data);
+    // Usando PUT conforme a rota do backend
+    const response = await api.put(`/admin/users/${id}`, data);
     return response.data;
   },
 
@@ -304,6 +305,11 @@ export const adminAPI = {
 
   refundPayment: async (id: number, amount?: number) => {
     const response = await api.patch(`/admin/payments/${id}/refund`, { amount });
+    return response.data;
+  },
+
+  syncPayment: async (id: number) => {
+    const response = await api.post(`/admin/payments/${id}/sync`);
     return response.data;
   },
 

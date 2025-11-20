@@ -1,5 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth';
 import { requireAdminSecure, AdminRequest } from '../middleware/adminAuth'; // Novo middleware v2.0
 import { NotificationService } from '../services/NotificationService';
@@ -747,7 +748,7 @@ router.get('/users', async (req: AuthRequest, res) => {
 router.put('/users/:id', async (req: AuthRequest, res) => {
   try {
     const userId = parseInt(req.params.id);
-    const { name, email, isAdmin } = req.body;
+    const { name, email, password, isAdmin } = req.body;
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -769,13 +770,24 @@ router.put('/users/:id', async (req: AuthRequest, res) => {
       }
     }
 
+    // Preparar dados para atualização
+    const updateData: any = {
+      name,
+      email,
+      isAdmin: isAdmin !== undefined ? isAdmin : existingUser.isAdmin,
+    };
+
+    // Se uma nova senha foi fornecida, fazer hash
+    if (password && password.trim() !== '') {
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
+      }
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
     const user = await prisma.user.update({
       where: { id: userId },
-      data: {
-        name,
-        email,
-        isAdmin: isAdmin !== undefined ? isAdmin : existingUser.isAdmin,
-      },
+      data: updateData,
       select: {
         id: true,
         name: true,
@@ -2026,6 +2038,77 @@ router.get('/payments/stats', async (req: AuthRequest, res) => {
   } catch (error: any) {
     console.error('Error fetching payment stats:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas de pagamentos' });
+  }
+});
+
+// POST /api/admin/payments/:id/sync - Sincronizar pagamento com gateway (admin)
+router.post('/payments/:id/sync', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+
+    const payment = await prisma.payment.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        order: true,
+      },
+    });
+
+    if (!payment) {
+      return res.status(404).json({ error: 'Pagamento não encontrado' });
+    }
+
+    // Se for Asaas, buscar status atualizado
+    if (payment.gateway === 'asaas' && payment.gatewayPaymentId) {
+      const { AsaasService } = await import('../services/AsaasService');
+      const asaasResult = await AsaasService.getPayment(payment.gatewayPaymentId);
+
+      if (asaasResult.success && asaasResult.payment) {
+        // Atualizar status usando PaymentService
+        const { PaymentService } = await import('../services/PaymentService');
+        const updateResult = await PaymentService.updatePaymentStatus(
+          payment.id,
+          asaasResult.payment.status,
+          `Status sincronizado do Asaas: ${asaasResult.payment.statusDetail}`,
+          { synced: true, syncedAt: new Date().toISOString() }
+        );
+
+        if (updateResult.success) {
+          // Buscar pagamento atualizado
+          const updatedPayment = await prisma.payment.findUnique({
+            where: { id: payment.id },
+            include: {
+              order: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+          res.json({
+            ...updatedPayment,
+            amount: Number(updatedPayment!.amount),
+            fees: updatedPayment!.fees ? Number(updatedPayment!.fees) : null,
+            netAmount: updatedPayment!.netAmount ? Number(updatedPayment!.netAmount) : null,
+          });
+        } else {
+          return res.status(400).json({ error: updateResult.error });
+        }
+      } else {
+        return res.status(400).json({ error: asaasResult.error || 'Erro ao sincronizar com Asaas' });
+      }
+    } else {
+      return res.status(400).json({ error: 'Sincronização disponível apenas para pagamentos Asaas' });
+    }
+  } catch (error: any) {
+    console.error('Error syncing payment:', error);
+    res.status(500).json({ error: 'Erro ao sincronizar pagamento' });
   }
 });
 

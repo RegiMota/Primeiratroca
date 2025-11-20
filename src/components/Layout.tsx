@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Header } from './Header';
 import { Footer } from './Footer';
 import { MobileTabBar } from './MobileTabBar';
+import { FloatingElements } from './FloatingElements';
 
 interface LayoutProps {
   children: ReactNode;
@@ -16,6 +17,7 @@ export function Layout({ children }: LayoutProps) {
       </main>
       <Footer />
       <MobileTabBar />
+      <FloatingElements />
     </div>
   );
 }

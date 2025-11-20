@@ -1,4 +1,17 @@
 import { useLocation } from 'wouter';
+import { Facebook, Instagram, Youtube, Lock, CheckCircle2, CreditCard, Heart } from 'lucide-react';
+
+// Componente de ícone do TikTok customizado
+const TikTokIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+  </svg>
+);
 
 export function Footer() {
   const [, setLocation] = useLocation();
@@ -9,7 +22,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           {/* Sobre */}
           <div>
-            <h4 className="font-bold text-white mb-4">Primaria Troca & Cia</h4>
+            <h4 className="font-bold text-white mb-4">Primeira Troca & Cia</h4>
             <p className="text-sm">Especializada em roupas infantis de qualidade, oferecendo conforto, estilo e a máxima segurança para a pele delicada do seu bebê.</p>
             <p className="text-sm mt-4 italic text-emerald-400 font-semibold">"Roupas que abraçam o começo da vida"</p>
           </div>
@@ -48,24 +61,76 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Redes Sociais */}
+        {/* Redes Sociais e Selos */}
         <div className="border-t border-gray-700 pt-8">
-          <div className="flex justify-center gap-4 mb-6">
-            <a href="#" className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white hover:bg-emerald-600 transition shadow-md">f</a>
-            <a href="#" className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white hover:bg-emerald-600 transition shadow-md">📷</a>
-            <a href="#" className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white hover:bg-emerald-600 transition shadow-md">𝕏</a>
-            <a href="#" className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white hover:bg-emerald-600 transition shadow-md">▶</a>
+          {/* Redes Sociais */}
+          <div className="flex justify-center gap-4 mb-8">
+            <a 
+              href="https://www.facebook.com/share/1DKpwncVpV/?mibextid=wwXIfr" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-12 h-12 rounded-full bg-[#1877F2] hover:bg-[#166FE5] flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:shadow-lg shadow-md group"
+              aria-label="Facebook"
+            >
+              <Facebook className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            </a>
+            <a 
+              href="https://www.instagram.com/primeiratrocaecia/" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-12 h-12 rounded-full flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:shadow-lg shadow-md group"
+              style={{
+                background: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)'
+              }}
+              aria-label="Instagram"
+            >
+              <Instagram className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            </a>
+            <a 
+              href="https://www.tiktok.com/@primeiratrocaecia" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-12 h-12 rounded-full bg-black hover:bg-gray-900 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:shadow-lg shadow-md group"
+              aria-label="TikTok"
+            >
+              <TikTokIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            </a>
+            <a 
+              href="https://www.youtube.com/@PrimeiraTrocaecia" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-12 h-12 rounded-full bg-[#FF0000] hover:bg-[#CC0000] flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:shadow-lg shadow-md group"
+              aria-label="YouTube"
+            >
+              <Youtube className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            </a>
           </div>
 
           {/* Selos de Segurança */}
-          <div className="flex justify-center gap-4 mb-6 text-xs flex-wrap">
-            <span className="bg-emerald-500 text-white px-3 py-1 rounded shadow-md">🔒 SSL Seguro</span>
-            <span className="bg-emerald-500 text-white px-3 py-1 rounded shadow-md">✓ Compra Segura</span>
-            <span className="bg-emerald-500 text-white px-3 py-1 rounded shadow-md">💳 Múltiplas Formas de Pagamento</span>
+          <div className="flex justify-center gap-3 mb-8 flex-wrap">
+            <div className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+              <Lock className="w-4 h-4" />
+              <span className="text-sm font-medium">SSL Seguro</span>
+            </div>
+            <div className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+              <CheckCircle2 className="w-4 h-4" />
+              <span className="text-sm font-medium">Compra Segura</span>
+            </div>
+            <div className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+              <CreditCard className="w-4 h-4" />
+              <span className="text-sm font-medium">Múltiplas Formas de Pagamento</span>
+            </div>
           </div>
 
-          <p className="text-center text-xs text-gray-500">© 2025 Primaria Troca & Cia. Todos os direitos reservados.</p>
-          <p className="text-center text-xs text-gray-500 mt-2">❤️ Roupas que abraçam o começo da vida ❤️</p>
+          {/* Copyright e Tagline */}
+          <div className="text-center space-y-2">
+            <p className="text-sm text-gray-400">© 2025 Primeira Troca & Cia. Todos os direitos reservados.</p>
+            <p className="text-sm text-gray-400 flex items-center justify-center gap-2">
+              <Heart className="w-4 h-4 text-pink-400 fill-pink-400" />
+              Roupas que abraçam o começo da vida
+              <Heart className="w-4 h-4 text-pink-400 fill-pink-400" />
+            </p>
+          </div>
         </div>
       </div>
     </footer>

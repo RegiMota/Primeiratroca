@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, User, Shield, Mail, Calendar } from 'lucide-react';
+import { useLocation } from 'wouter';
 import { useAuth } from '../contexts/AuthContext';
 import { adminAPI } from '../lib/api';
 import { Button } from '../components/ui/button';
@@ -28,6 +29,7 @@ interface User {
 }
 
 export function AdminUsersPage() {
+  const [, setLocation] = useLocation();
   const { user: currentUser, isAuthenticated } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +41,7 @@ export function AdminUsersPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    password: '',
     isAdmin: false,
   });
 
@@ -83,6 +86,7 @@ export function AdminUsersPage() {
     setFormData({
       name: user.name,
       email: user.email,
+      password: '', // Senha vazia por padrão (opcional)
       isAdmin: user.isAdmin,
     });
     setIsDialogOpen(true);
@@ -115,7 +119,17 @@ export function AdminUsersPage() {
     try {
       if (editingUser) {
         // Prevent removing admin status from self
-        const userData = { ...formData };
+        const userData: any = { 
+          name: formData.name,
+          email: formData.email,
+          isAdmin: formData.isAdmin,
+        };
+        
+        // Incluir senha apenas se foi fornecida
+        if (formData.password && formData.password.trim() !== '') {
+          userData.password = formData.password;
+        }
+        
         if (editingUser.id === currentUser?.id) {
           userData.isAdmin = true; // Keep admin status
         }
@@ -131,6 +145,7 @@ export function AdminUsersPage() {
       setFormData({
         name: '',
         email: '',
+        password: '',
         isAdmin: false,
       });
     } catch (error: any) {
@@ -146,6 +161,7 @@ export function AdminUsersPage() {
     setFormData({
       name: '',
       email: '',
+      password: '',
       isAdmin: false,
     });
     setIsDialogOpen(true);
@@ -325,6 +341,23 @@ export function AdminUsersPage() {
                   className="mt-2"
                   placeholder="email@exemplo.com"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="password">Nova Senha (opcional)</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  className="mt-2"
+                  placeholder="Deixe em branco para não alterar a senha"
+                  minLength={6}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Deixe em branco para manter a senha atual. Mínimo de 6 caracteres se informada.
+                </p>
               </div>
 
               <div className="flex items-center gap-2 rounded-lg border p-4">

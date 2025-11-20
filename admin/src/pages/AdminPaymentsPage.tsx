@@ -69,6 +69,7 @@ export function AdminPaymentsPage() {
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [refunding, setRefunding] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState<number | null>(null);
 
   useEffect(() => {
     loadPayments();
@@ -140,6 +141,37 @@ export function AdminPaymentsPage() {
       toast.error(error.response?.data?.error || 'Erro ao processar reembolso');
     } finally {
       setRefunding(null);
+    }
+  };
+
+  const handleSync = async (paymentId: number) => {
+    if (syncing === paymentId) return;
+
+    try {
+      setSyncing(paymentId);
+      const updatedPayment = await adminAPI.syncPayment(paymentId);
+      
+      // Atualizar pagamento na lista
+      setPayments((prevPayments) =>
+        prevPayments.map((payment) =>
+          payment.id === paymentId ? updatedPayment : payment
+        )
+      );
+
+      // Se estiver visualizando detalhes, atualizar também
+      if (selectedPayment?.id === paymentId) {
+        setSelectedPayment(updatedPayment);
+      }
+
+      // Atualizar stats
+      loadStats();
+
+      toast.success('Pagamento sincronizado com sucesso');
+    } catch (error: any) {
+      console.error('Error syncing payment:', error);
+      toast.error(error.response?.data?.error || 'Erro ao sincronizar pagamento');
+    } finally {
+      setSyncing(null);
     }
   };
 
@@ -324,9 +356,24 @@ export function AdminPaymentsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleViewDetails(payment.id)}
+                              title="Ver detalhes"
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            {payment.gateway === 'asaas' && payment.gatewayPaymentId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSync(payment.id)}
+                                disabled={syncing === payment.id}
+                                className="text-blue-600 hover:text-blue-700"
+                                title="Sincronizar com Asaas"
+                              >
+                                <RefreshCw
+                                  className={`h-4 w-4 ${syncing === payment.id ? 'animate-spin' : ''}`}
+                                />
+                              </Button>
+                            )}
                             {payment.status === 'approved' && (
                               <Button
                                 variant="ghost"
@@ -334,6 +381,7 @@ export function AdminPaymentsPage() {
                                 onClick={() => handleRefund(payment.id)}
                                 disabled={refunding === payment.id}
                                 className="text-red-600 hover:text-red-700"
+                                title="Reembolsar"
                               >
                                 <RefreshCw
                                   className={`h-4 w-4 ${refunding === payment.id ? 'animate-spin' : ''}`}
