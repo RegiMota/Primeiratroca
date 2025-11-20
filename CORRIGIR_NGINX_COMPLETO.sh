@@ -12,11 +12,13 @@ echo "✅ Backup criado"
 echo ""
 
 # Corrigir frontend - adicionar rota /api/ e corrigir porta
+# NOTA: Não criar upstream aqui, já existe no primeira-troca-api.conf
 echo "📝 Corrigindo configuração do frontend..."
 cat > /etc/nginx/conf.d/primeira-troca-frontend.conf <<'EOF'
-upstream backend {
-    server localhost:5000;
-}
+# Upstream já definido em primeira-troca-api.conf
+# upstream backend {
+#     server localhost:5000;
+# }
 
 server {
     server_name primeiratrocaecia.com.br www.primeiratrocaecia.com.br;
