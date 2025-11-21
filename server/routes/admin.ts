@@ -772,9 +772,9 @@ router.put('/users/:id', async (req: AuthRequest, res) => {
 
     // Preparar dados para atualização
     const updateData: any = {
-      name,
-      email,
-      isAdmin: isAdmin !== undefined ? isAdmin : existingUser.isAdmin,
+        name,
+        email,
+        isAdmin: isAdmin !== undefined ? isAdmin : existingUser.isAdmin,
     };
 
     // Se uma nova senha foi fornecida, fazer hash
