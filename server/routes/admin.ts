@@ -346,10 +346,10 @@ router.get('/products', async (req: AdminRequest, res) => {
 
     const where: any = {};
     if (search) {
-      // MySQL não suporta mode: 'insensitive', então usamos busca case-sensitive
+      // Usar mode: 'insensitive' para busca case-insensitive (funciona com PostgreSQL)
       where.OR = [
-        { name: { contains: search as string } },
-        { description: { contains: search as string } },
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { description: { contains: search as string, mode: 'insensitive' } },
       ];
     }
     if (categoryId) {

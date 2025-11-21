@@ -104,13 +104,13 @@ router.get('/', async (req, res) => {
       const searchTerm = (search as string).trim();
       if (searchTerm.length > 0) {
         // Combinar busca com outros filtros usando AND
-        // MySQL geralmente já é case-insensitive com collation utf8_general_ci
+        // Usar mode: 'insensitive' para busca case-insensitive (funciona com PostgreSQL)
         where.AND = [
           ...(where.AND || []),
           {
             OR: [
-              { name: { contains: searchTerm } },
-              { description: { contains: searchTerm } },
+              { name: { contains: searchTerm, mode: 'insensitive' } },
+              { description: { contains: searchTerm, mode: 'insensitive' } },
             ],
           },
         ];
@@ -427,12 +427,12 @@ router.get('/search/suggestions', async (req, res) => {
 
     const searchTerm = (q as string).trim();
     
-    // Buscar produtos por nome (MySQL é case-insensitive por padrão)
+    // Buscar produtos por nome (case-insensitive usando mode: 'insensitive')
     const products = await prisma.product.findMany({
       where: {
         OR: [
-          { name: { contains: searchTerm } },
-          { description: { contains: searchTerm } },
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { description: { contains: searchTerm, mode: 'insensitive' } },
         ],
       },
       select: {
