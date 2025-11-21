@@ -409,11 +409,30 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
   try {
     const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, keywords, featured, stock } = req.body;
     
-    // Debug: Log keywords recebido
-    console.log('[POST /products] Keywords recebido:', keywords, 'Tipo:', typeof keywords);
+    // Debug: Log dados recebidos
+    console.log('[POST /products] Dados recebidos:', {
+      name: !!name,
+      description: !!description,
+      price: price,
+      image: !!image,
+      categoryIds: categoryIds,
+      categoryId: categoryId,
+      keywords: keywords,
+    });
 
-    if (!name || !description || !price || !image) {
-      return res.status(400).json({ error: 'Campos obrigatórios faltando' });
+    // Validação detalhada de campos obrigatórios
+    const missingFields: string[] = [];
+    if (!name || name.trim() === '') missingFields.push('nome');
+    if (!description || description.trim() === '') missingFields.push('descrição');
+    if (!price || isNaN(parseFloat(price))) missingFields.push('preço válido');
+    if (!image || image.trim() === '') missingFields.push('imagem');
+    
+    if (missingFields.length > 0) {
+      return res.status(400).json({ 
+        error: 'Campos obrigatórios faltando',
+        missingFields: missingFields,
+        details: `Faltam os seguintes campos: ${missingFields.join(', ')}`
+      });
     }
 
     // Suportar tanto categoryIds (array) quanto categoryId (single) para compatibilidade
@@ -435,7 +454,13 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
     }
 
     if (categoryIdsArray.length === 0) {
-      return res.status(400).json({ error: 'Selecione pelo menos uma categoria' });
+      console.log('[POST /products] Erro: Nenhuma categoria selecionada');
+      console.log('[POST /products] categoryIds recebido:', categoryIds);
+      console.log('[POST /products] categoryId recebido:', categoryId);
+      return res.status(400).json({ 
+        error: 'Selecione pelo menos uma categoria',
+        details: 'É necessário selecionar pelo menos uma categoria para o produto'
+      });
     }
 
     // Processar keywords para criação
