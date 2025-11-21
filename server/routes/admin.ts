@@ -612,88 +612,55 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
 
     res.json(formattedProduct);
   } catch (error: any) {
-    console.error('Create product error:', error);
-    console.error('Error details:', {
+    console.error('[POST /products] Erro ao criar produto:', error);
+    console.error('[POST /products] Error details:', {
       code: error.code,
       message: error.message,
       meta: error.meta,
+      stack: error.stack,
     });
     
-    // Erro específico para campo desconhecido (keywords pode não existir no banco ainda)
-    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
-      // Tentar criar sem o campo keywords (caso o campo ainda não exista no banco)
-      try {
-        const productDataWithoutKeywords: any = {
-          name,
-          description,
-          detailedDescription: detailedDescription || null,
-          price: parseFloat(price),
-          originalPrice: originalPrice ? parseFloat(originalPrice) : null,
-          image,
-          sizes: JSON.stringify(sizes || []),
-          colors: JSON.stringify(colors || []),
-          gender: gender || null,
-          featured: featured || false,
-          stock: parseInt(stock) || 0,
-          categories: {
-            create: categoryIdsArray.map((catId: number) => ({
-              categoryId: catId,
-            })),
-          },
-        };
-        
-        const product = await prisma.product.create({
-          data: productDataWithoutKeywords,
-          include: {
-            categories: {
-              include: {
-                category: true,
-              },
-            },
-          },
-        });
-        
-        console.warn('Produto criado sem keywords (campo pode não existir no banco ainda)');
-        
-        const formattedProduct = {
-          ...product,
-          price: Number(product.price),
-          originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
-          sizes: JSON.parse(product.sizes),
-          colors: JSON.parse(product.colors),
-          gender: product.gender || null,
-          keywords: null, // Campo não existe no banco ainda
-          category: product.categories?.[0]?.category || null,
-        };
-        
-        return res.json(formattedProduct);
-      } catch (retryError: any) {
-        console.error('Error on retry without keywords:', retryError);
-      }
-    }
-    
-    // Retornar mensagem de erro mais detalhada
+    // Retornar mensagem de erro mais detalhada e útil
     const errorMessage = error.message || 'Erro desconhecido ao criar produto';
     const errorCode = error.code || 'UNKNOWN';
     
-    // Mensagem mais amigável para o usuário
+    // Mensagem mais amigável para o usuário baseada no tipo de erro
     let userFriendlyMessage = 'Erro ao criar produto';
-    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
-      userFriendlyMessage = 'O campo keywords não existe no banco de dados. Execute a migração do Prisma.';
-    } else if (error.message?.includes('category')) {
-      userFriendlyMessage = 'Erro ao associar categorias ao produto. Verifique se as categorias existem.';
+    let hint: string | undefined;
+    
+    if (error.code === 'P2002') {
+      // Violação de constraint única
+      userFriendlyMessage = 'Já existe um produto com esses dados. Verifique campos únicos (nome, etc).';
+    } else if (error.code === 'P2003') {
+      // Foreign key constraint
+      userFriendlyMessage = 'Erro ao associar categorias. Verifique se as categorias selecionadas existem.';
+      hint = 'Certifique-se de que todas as categorias selecionadas existem no banco de dados.';
+    } else if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
+      userFriendlyMessage = 'O campo keywords não existe no banco de dados.';
+      hint = 'Execute: ./SOLUCAO_DEFINITIVA_PRODUTO.sh';
+    } else if (error.message?.includes('category') || error.message?.includes('Category')) {
+      userFriendlyMessage = 'Erro ao associar categorias ao produto.';
+      hint = 'Verifique se as categorias selecionadas existem e estão ativas.';
     } else if (error.message?.includes('constraint') || error.message?.includes('unique')) {
-      userFriendlyMessage = 'Já existe um produto com esses dados. Verifique os campos únicos.';
+      userFriendlyMessage = 'Violação de regra do banco de dados.';
+      hint = 'Verifique se não há duplicatas ou dados inválidos.';
+    } else if (error.message?.includes('connect') || error.message?.includes('timeout')) {
+      userFriendlyMessage = 'Erro de conexão com o banco de dados.';
+      hint = 'Verifique se o banco de dados está rodando e acessível.';
     }
     
-    res.status(500).json({ 
+    // Em desenvolvimento, incluir mais detalhes
+    const response: any = {
       error: userFriendlyMessage,
-      details: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
       code: errorCode,
-      hint: error.code === 'P2009' || error.message?.includes('keywords')
-        ? 'Execute: docker-compose exec backend npx prisma db push --accept-data-loss'
-        : undefined
-    });
+    };
+    
+    if (hint) {
+      response.hint = hint;
+    }
+    
+    res.status(500).json(response);
   }
 });
 
