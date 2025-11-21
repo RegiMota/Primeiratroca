@@ -1,33 +1,33 @@
 #!/bin/bash
 
 echo "🔍 TESTANDO ROTA /api/auth/me"
-echo "============================="
+echo "=============================="
 
-# 1. Testar diretamente no backend (localhost)
-echo -e "\n1️⃣ Testando diretamente no backend (localhost:5000):"
-curl -v -H "Authorization: Bearer test" "http://localhost:5000/api/auth/me" 2>&1 | head -30
+# 1. Testar localmente (localhost:5000)
+echo -e "\n1️⃣ Testando localmente (localhost:5000/api/auth/me):"
+LOCAL_RESPONSE=$(curl -s -o /dev/null -w "Status: %{http_code}\n" "http://localhost:5000/api/auth/me" -H "Authorization: Bearer test" 2>/dev/null)
+echo "   $LOCAL_RESPONSE"
 
-# 2. Verificar se a rota está registrada
-echo -e "\n2️⃣ Verificando logs do backend para erros relacionados a /auth/me:"
-docker-compose logs backend --tail=100 | grep -i "auth/me\|404\|not found" | tail -10
+# 2. Testar via HTTPS (primeiratrocaecia.com.br)
+echo -e "\n2️⃣ Testando via HTTPS (https://primeiratrocaecia.com.br/api/auth/me):"
+HTTPS_RESPONSE=$(curl -s -o /dev/null -w "Status: %{http_code}\n" "https://primeiratrocaecia.com.br/api/auth/me" -H "Authorization: Bearer test" 2>/dev/null)
+echo "   $HTTPS_RESPONSE"
 
-# 3. Testar health check
-echo -e "\n3️⃣ Testando health check:"
-curl -s "http://localhost:5000/api/health" | head -c 200
-echo ""
+# 3. Testar com verbose para ver o que está acontecendo
+echo -e "\n3️⃣ Testando com verbose (primeiros 30 caracteres da resposta):"
+HTTPS_VERBOSE=$(curl -s -w "\nStatus: %{http_code}\n" "https://primeiratrocaecia.com.br/api/auth/me" -H "Authorization: Bearer test" 2>/dev/null | head -c 200)
+echo "$HTTPS_VERBOSE"
 
-# 4. Verificar configuração do Nginx (se aplicável)
-echo -e "\n4️⃣ Verificando se há configuração do Nginx para /api/auth:"
-if [ -f "/etc/nginx/sites-available/primeira-troca-api.conf" ]; then
-    grep -A 5 "location /api" /etc/nginx/sites-available/primeira-troca-api.conf | head -20
-else
-    echo "   Arquivo de configuração do Nginx não encontrado"
-fi
+# 4. Verificar logs do Nginx para esta requisição
+echo -e "\n4️⃣ Verificando logs do Nginx (últimas 10 linhas relacionadas a /api/auth/me):"
+tail -n 50 /var/log/nginx/access.log | grep "/api/auth/me" | tail -n 5
 
-# 5. Testar outras rotas de auth
-echo -e "\n5️⃣ Testando outras rotas de auth:"
-echo "   - POST /api/auth/login (deve retornar 400 sem credenciais):"
-curl -s -o /dev/null -w "Status: %{http_code}\n" -X POST "http://localhost:5000/api/auth/login"
+# 5. Verificar se o backend está recebendo a requisição
+echo -e "\n5️⃣ Verificando logs do backend (últimas 20 linhas):"
+docker-compose logs backend --tail=20 | grep -E "auth/me|GET.*auth" | tail -n 5
+
+# 6. Testar diretamente no container do backend
+echo -e "\n6️⃣ Testando diretamente no container do backend:"
+docker-compose exec backend curl -s -o /dev/null -w "Status: %{http_code}\n" "http://localhost:5000/api/auth/me" -H "Authorization: Bearer test" 2>/dev/null
 
 echo -e "\n✅ Teste concluído!"
-
