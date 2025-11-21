@@ -29,6 +29,8 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { toast } from 'sonner';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 
 const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
   pending: {
@@ -70,6 +72,7 @@ export function AdminPaymentsPage() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [refunding, setRefunding] = useState<number | null>(null);
   const [syncing, setSyncing] = useState<number | null>(null);
+  const [refundConfirmation, setRefundConfirmation] = useState<string>('');
 
   useEffect(() => {
     loadPayments();
@@ -107,6 +110,7 @@ export function AdminPaymentsPage() {
     try {
       const payment = await adminAPI.getPaymentById(paymentId);
       setSelectedPayment(payment);
+      setRefundConfirmation(''); // Limpar confirmação ao abrir modal
       setIsDetailDialogOpen(true);
     } catch (error) {
       console.error('Error loading payment details:', error);
@@ -114,8 +118,17 @@ export function AdminPaymentsPage() {
     }
   };
 
-  const handleRefund = async (paymentId: number) => {
-    if (!confirm('Tem certeza que deseja reembolsar este pagamento?')) {
+  const handleRefund = async (paymentId: number, orderId: number) => {
+    // Validar confirmação com número do pedido
+    const confirmationValue = refundConfirmation.trim();
+    const expectedOrderId = orderId.toString();
+
+    if (confirmationValue !== expectedOrderId) {
+      toast.error(`Por favor, digite o número do pedido (${expectedOrderId}) para confirmar o reembolso`);
+      return;
+    }
+
+    if (!confirm('Tem certeza que deseja reembolsar este pagamento? Esta ação não pode ser desfeita.')) {
       return;
     }
 
@@ -132,10 +145,21 @@ export function AdminPaymentsPage() {
         )
       );
 
+      // Se estiver visualizando detalhes, atualizar também
+      if (selectedPayment?.id === paymentId) {
+        setSelectedPayment({ ...selectedPayment, status: 'refunded' });
+      }
+
+      // Limpar campo de confirmação
+      setRefundConfirmation('');
+
       // Atualizar stats
       loadStats();
 
       toast.success('Reembolso processado com sucesso');
+      
+      // Fechar modal após sucesso
+      setIsDetailDialogOpen(false);
     } catch (error: any) {
       console.error('Error refunding payment:', error);
       toast.error(error.response?.data?.error || 'Erro ao processar reembolso');
@@ -374,20 +398,6 @@ export function AdminPaymentsPage() {
                                 />
                               </Button>
                             )}
-                            {payment.status === 'approved' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRefund(payment.id)}
-                                disabled={refunding === payment.id}
-                                className="text-red-600 hover:text-red-700"
-                                title="Reembolsar"
-                              >
-                                <RefreshCw
-                                  className={`h-4 w-4 ${refunding === payment.id ? 'animate-spin' : ''}`}
-                                />
-                              </Button>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -479,19 +489,34 @@ export function AdminPaymentsPage() {
               )}
 
               {selectedPayment.status === 'approved' && (
-                <div className="pt-4">
+                <div className="space-y-4 border-t pt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="refund-confirmation" className="text-sm font-medium text-gray-700">
+                      Confirmação de Reembolso
+                    </Label>
+                    <p className="text-xs text-gray-500">
+                      Para confirmar o reembolso, digite o número do pedido: <strong>#{selectedPayment.orderId}</strong>
+                    </p>
+                    <Input
+                      id="refund-confirmation"
+                      type="text"
+                      placeholder={`Digite ${selectedPayment.orderId} para confirmar`}
+                      value={refundConfirmation}
+                      onChange={(e) => setRefundConfirmation(e.target.value)}
+                      disabled={refunding === selectedPayment.id}
+                      className="max-w-xs"
+                    />
+                  </div>
                   <Button
                     variant="destructive"
-                    onClick={() => {
-                      setIsDetailDialogOpen(false);
-                      handleRefund(selectedPayment.id);
-                    }}
-                    disabled={refunding === selectedPayment.id}
+                    onClick={() => handleRefund(selectedPayment.id, selectedPayment.orderId)}
+                    disabled={refunding === selectedPayment.id || refundConfirmation.trim() !== selectedPayment.orderId.toString()}
+                    className="w-full sm:w-auto"
                   >
                     <RefreshCw
                       className={`mr-2 h-4 w-4 ${refunding === selectedPayment.id ? 'animate-spin' : ''}`}
                     />
-                    Processar Reembolso
+                    {refunding === selectedPayment.id ? 'Processando Reembolso...' : 'Processar Reembolso'}
                   </Button>
                 </div>
               )}
