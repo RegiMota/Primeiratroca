@@ -163,7 +163,7 @@ export function AdminProductsPage() {
         sizes: formData.sizes,
         colors: formData.colors,
         gender: formData.gender === 'none' ? undefined : (formData.gender || undefined), // Opcional: 'menino', 'menina', 'outros' ou undefined
-        keywords: formData.keywords?.trim() || undefined, // NOVO - Palavras-chave (opcional)
+        keywords: formData.keywords?.trim() || null, // NOVO - Palavras-chave (opcional) - enviar null se vazio para garantir atualização
       };
 
       let productId: number;

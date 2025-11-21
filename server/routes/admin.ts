@@ -390,6 +390,7 @@ router.get('/products', async (req: AdminRequest, res) => {
       sizes: JSON.parse(product.sizes || '[]'),
       colors: JSON.parse(product.colors || '[]'),
       gender: product.gender || null,
+      keywords: product.keywords || null, // NOVO - Incluir keywords na resposta
       stock: product.stock || 0,
       // Manter category para compatibilidade (primeira categoria)
       category: product.categories?.[0]?.category || product.category || null,
@@ -407,6 +408,9 @@ router.get('/products', async (req: AdminRequest, res) => {
 router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, res) => {
   try {
     const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, keywords, featured, stock } = req.body;
+    
+    // Debug: Log keywords recebido
+    console.log('[POST /products] Keywords recebido:', keywords, 'Tipo:', typeof keywords);
 
     if (!name || !description || !price || !image) {
       return res.status(400).json({ error: 'Campos obrigatórios faltando' });
@@ -434,6 +438,18 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
       return res.status(400).json({ error: 'Selecione pelo menos uma categoria' });
     }
 
+    // Processar keywords para criação
+    let processedKeywords: string | null = null;
+    if (keywords !== undefined && keywords !== null) {
+      if (typeof keywords === 'string' && keywords.trim()) {
+        processedKeywords = keywords.trim();
+      } else {
+        processedKeywords = null;
+      }
+    }
+    
+    console.log('[POST /products] Keywords processado para criação:', processedKeywords);
+
     const product = await prisma.product.create({
       data: {
         name,
@@ -445,7 +461,7 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
         sizes: JSON.stringify(sizes || []),
         colors: JSON.stringify(colors || []),
         gender: gender || null, // Opcional: 'menino', 'menina', 'outros' ou null
-        keywords: keywords && keywords.trim() ? keywords.trim() : null, // NOVO - Palavras-chave para busca (oculto, opcional)
+        keywords: processedKeywords, // NOVO - Palavras-chave para busca (oculto, opcional)
         featured: featured || false,
         stock: parseInt(stock) || 0,
         categories: {
@@ -519,6 +535,7 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
       sizes: JSON.parse(product.sizes),
       colors: JSON.parse(product.colors),
       gender: product.gender || null,
+      keywords: product.keywords || null, // NOVO - Incluir keywords na resposta
       // Manter category para compatibilidade (primeira categoria)
       category: product.categories?.[0]?.category || null,
     };
@@ -575,6 +592,7 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
           sizes: JSON.parse(product.sizes),
           colors: JSON.parse(product.colors),
           gender: product.gender || null,
+          keywords: null, // Campo não existe no banco ainda
           category: product.categories?.[0]?.category || null,
         };
         
@@ -601,6 +619,9 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
 router.put('/products/:id', async (req: AdminRequest, res) => {
   const productId = parseInt(req.params.id);
   const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, keywords, featured, stock } = req.body;
+  
+  // Debug: Log keywords recebido
+  console.log(`[PUT /products/${productId}] Keywords recebido:`, keywords, 'Tipo:', typeof keywords);
   
   // Declarar updateData fora do try para estar acessível no catch
   let updateData: any = {};
@@ -631,6 +652,21 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
     }
 
     // Preparar dados de atualização
+    // Processar keywords: se foi enviado (mesmo que seja null), processar; se não foi enviado, manter undefined
+    let processedKeywords: string | null | undefined = undefined;
+    if (keywords !== undefined) {
+      // Foi enviado explicitamente (pode ser string, null, ou string vazia)
+      if (keywords === null || keywords === '') {
+        processedKeywords = null;
+      } else if (typeof keywords === 'string' && keywords.trim()) {
+        processedKeywords = keywords.trim();
+      } else {
+        processedKeywords = null;
+      }
+    }
+    
+    console.log(`[PUT /products/${productId}] Keywords processado:`, processedKeywords, 'Tipo:', typeof processedKeywords);
+    
     updateData = {
       name,
       description,
@@ -641,10 +677,12 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
       sizes: sizes ? JSON.stringify(sizes) : undefined,
       colors: colors ? JSON.stringify(colors) : undefined,
       gender: gender !== undefined ? (gender || null) : undefined, // Opcional: 'menino', 'menina', 'outros' ou null
-      keywords: keywords !== undefined ? (keywords && keywords.trim() ? keywords.trim() : null) : undefined, // NOVO - Palavras-chave para busca (oculto, opcional)
+      ...(processedKeywords !== undefined && { keywords: processedKeywords }), // Incluir keywords apenas se foi explicitamente enviado
       featured,
       stock: stock !== undefined ? parseInt(stock) : undefined,
     };
+    
+    console.log(`[PUT /products/${productId}] updateData.keywords:`, updateData.keywords);
 
     // Se categoryIds foi fornecido, atualizar as categorias
     // Se categoryIdsArray for undefined, não atualizar categorias (manter as existentes)
@@ -764,6 +802,7 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
       sizes: JSON.parse(product.sizes),
       colors: JSON.parse(product.colors),
       gender: product.gender || null,
+      keywords: product.keywords || null, // NOVO - Incluir keywords na resposta
       // Manter category para compatibilidade (primeira categoria)
       category: product.categories?.[0]?.category || null,
     };
@@ -809,6 +848,7 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
           sizes: JSON.parse(product.sizes),
           colors: JSON.parse(product.colors),
           gender: product.gender || null,
+          keywords: null, // Campo não existe no banco ainda
           category: product.categories?.[0]?.category || null,
         };
         
