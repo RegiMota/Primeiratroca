@@ -15,32 +15,97 @@ async function migrateCategories() {
   console.log('🔄 Iniciando migração de categorias para many-to-many...\n');
 
   try {
-    // 1. Verificar se a tabela product_categories existe
-    const tableExists = await prisma.$queryRaw`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'product_categories'
-      );
-    `;
+    // 1. Verificar se a tabela product_categories existe (PostgreSQL)
+    let tableExists = false;
+    try {
+      const result = await prisma.$queryRaw`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'product_categories'
+        ) as exists;
+      `;
+      tableExists = result[0]?.exists || false;
+    } catch (error) {
+      console.log('⚠️  Erro ao verificar tabela, tentando método alternativo...');
+      // Tentar método alternativo: verificar se conseguimos fazer uma query na tabela
+      try {
+        await prisma.$queryRaw`SELECT 1 FROM product_categories LIMIT 1`;
+        tableExists = true;
+      } catch (e) {
+        tableExists = false;
+      }
+    }
 
-    if (!tableExists[0]?.exists) {
+    if (!tableExists) {
       console.log('❌ Tabela product_categories não existe!');
-      console.log('   Execute primeiro: npx prisma db push');
-      process.exit(1);
+      console.log('   Tentando criar a tabela manualmente...');
+      
+      try {
+        // Criar tabela manualmente
+        await prisma.$executeRaw`
+          CREATE TABLE IF NOT EXISTS product_categories (
+            id SERIAL PRIMARY KEY,
+            "productId" INTEGER NOT NULL,
+            "categoryId" INTEGER NOT NULL,
+            "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+            UNIQUE("productId", "categoryId")
+          );
+        `;
+        
+        // Criar índices
+        await prisma.$executeRaw`
+          CREATE INDEX IF NOT EXISTS idx_product_categories_product_id 
+          ON product_categories("productId");
+        `;
+        
+        await prisma.$executeRaw`
+          CREATE INDEX IF NOT EXISTS idx_product_categories_category_id 
+          ON product_categories("categoryId");
+        `;
+        
+        // Criar foreign keys
+        await prisma.$executeRaw`
+          ALTER TABLE product_categories
+          ADD CONSTRAINT IF NOT EXISTS fk_product_categories_product
+          FOREIGN KEY ("productId") REFERENCES products(id) ON DELETE CASCADE;
+        `;
+        
+        await prisma.$executeRaw`
+          ALTER TABLE product_categories
+          ADD CONSTRAINT IF NOT EXISTS fk_product_categories_category
+          FOREIGN KEY ("categoryId") REFERENCES categories(id) ON DELETE CASCADE;
+        `;
+        
+        console.log('✅ Tabela product_categories criada com sucesso!');
+        tableExists = true;
+      } catch (createError) {
+        console.error('❌ Erro ao criar tabela:', createError.message);
+        console.log('   Execute manualmente: npx prisma db push --force-reset');
+        process.exit(1);
+      }
+    } else {
+      console.log('✅ Tabela product_categories encontrada!');
     }
 
     // 2. Verificar se ainda existe o campo categoryId na tabela products
-    const columnExists = await prisma.$queryRaw`
-      SELECT EXISTS (
-        SELECT FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'products' 
-        AND column_name = 'categoryId'
-      );
-    `;
+    let columnExists = false;
+    try {
+      const result = await prisma.$queryRaw`
+        SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'products' 
+          AND column_name = 'categoryId'
+        ) as exists;
+      `;
+      columnExists = result[0]?.exists || false;
+    } catch (error) {
+      console.log('⚠️  Erro ao verificar coluna categoryId, assumindo que não existe...');
+      columnExists = false;
+    }
 
-    if (!columnExists[0]?.exists) {
+    if (!columnExists) {
       console.log('⚠️  Campo categoryId não existe mais na tabela products.');
       console.log('   A migração pode já ter sido executada ou o schema foi atualizado.');
       console.log('   Verificando se há produtos sem categorias...\n');
@@ -52,30 +117,44 @@ async function migrateCategories() {
     // Se o campo não existir mais, buscar produtos sem categorias na tabela de junção
     let productsToMigrate = [];
 
-    if (columnExists[0]?.exists) {
-      // Buscar produtos com categoryId (usando query raw porque o Prisma pode não ter o campo)
-      productsToMigrate = await prisma.$queryRaw`
-        SELECT id, "categoryId" 
-        FROM products 
-        WHERE "categoryId" IS NOT NULL
-      `;
-    } else {
-      // Buscar produtos que não têm categorias na tabela de junção
-      const productsWithCategories = await prisma.productCategory.findMany({
-        select: { productId: true },
-        distinct: ['productId'],
-      });
-      const productIdsWithCategories = new Set(
-        productsWithCategories.map((pc) => pc.productId)
-      );
+    if (columnExists) {
+      try {
+        // Buscar produtos com categoryId (usando query raw porque o Prisma pode não ter o campo)
+        productsToMigrate = await prisma.$queryRaw`
+          SELECT id, "categoryId" 
+          FROM products 
+          WHERE "categoryId" IS NOT NULL
+        `;
+      } catch (error) {
+        console.log('⚠️  Erro ao buscar produtos com categoryId:', error.message);
+        console.log('   Tentando método alternativo...');
+        productsToMigrate = [];
+      }
+    }
+    
+    // Se não encontrou produtos com categoryId, verificar produtos sem categorias
+    if (productsToMigrate.length === 0) {
+      try {
+        // Buscar produtos que não têm categorias na tabela de junção
+        const productsWithCategories = await prisma.productCategory.findMany({
+          select: { productId: true },
+          distinct: ['productId'],
+        });
+        const productIdsWithCategories = new Set(
+          productsWithCategories.map((pc) => pc.productId)
+        );
 
-      const allProducts = await prisma.product.findMany({
-        select: { id: true },
-      });
+        const allProducts = await prisma.product.findMany({
+          select: { id: true },
+        });
 
-      productsToMigrate = allProducts
-        .filter((p) => !productIdsWithCategories.has(p.id))
-        .map((p) => ({ id: p.id, categoryId: null }));
+        productsToMigrate = allProducts
+          .filter((p) => !productIdsWithCategories.has(p.id))
+          .map((p) => ({ id: p.id, categoryId: null }));
+      } catch (error) {
+        console.log('⚠️  Erro ao buscar produtos sem categorias:', error.message);
+        productsToMigrate = [];
+      }
     }
 
     if (productsToMigrate.length === 0) {
