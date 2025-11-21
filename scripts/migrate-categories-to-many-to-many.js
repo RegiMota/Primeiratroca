@@ -104,6 +104,8 @@ async function migrateCategories() {
       console.log('⚠️  Erro ao verificar coluna categoryId, assumindo que não existe...');
       columnExists = false;
     }
+    
+    console.log(`   Campo categoryId existe: ${columnExists}\n`);
 
     if (!columnExists) {
       console.log('⚠️  Campo categoryId não existe mais na tabela products.');
