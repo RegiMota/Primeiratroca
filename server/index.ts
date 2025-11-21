@@ -22,6 +22,7 @@ import wishlistRoutes from './routes/wishlist';
 import ticketsRoutes from './routes/tickets';
 import chatRoutes from './routes/chat';
 import faqRoutes from './routes/faq';
+import announcementsRoutes from './routes/announcements';
 import { initSocketServer } from './socket';
 import { initStockJobs } from './jobs/stockJobs';
 import { initWishlistJobs } from './jobs/wishlistJobs';
@@ -122,6 +123,7 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/tickets', ticketsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/faq', faqRoutes);
+app.use('/api/announcements', announcementsRoutes);
 
 // Error handling middleware (must be after routes)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

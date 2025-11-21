@@ -21,6 +21,7 @@ import { AdminStockPage } from './pages/AdminStockPage';
 import { AdminShippingPage } from './pages/AdminShippingPage';
 import { AdminTicketsPage } from './pages/AdminTicketsPage';
 import { AdminContentPage } from './pages/AdminContentPage';
+import { AdminAnnouncementsPage } from './pages/AdminAnnouncementsPage';
 import { useAuth } from './contexts/AuthContext';
 import { useEffect } from 'react';
 

@@ -1077,4 +1077,12 @@ export const faqAPI = {
   },
 };
 
+// Announcements API
+export const announcementsAPI = {
+  getAll: async () => {
+    const response = await api.get('/announcements');
+    return response.data;
+  },
+};
+
 export default api;

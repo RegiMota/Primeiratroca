@@ -3222,5 +3222,166 @@ router.delete('/menu-items/:id', async (req: AdminRequest, res) => {
   }
 });
 
+// ============================================
+// ROTAS PARA GERENCIAR AVISOS/PROMOÇÕES
+// ============================================
+
+// GET /api/admin/announcements - Lista todos os avisos
+router.get('/announcements', async (req: AdminRequest, res) => {
+  try {
+    const announcements = await prisma.announcement.findMany({
+      orderBy: [
+        { order: 'asc' },
+        { createdAt: 'desc' },
+      ],
+    });
+    res.json(announcements);
+  } catch (error: any) {
+    console.error('Error fetching announcements:', error);
+    res.status(500).json({ error: 'Erro ao buscar avisos' });
+  }
+});
+
+// GET /api/admin/announcements/:id - Detalhes de um aviso
+router.get('/announcements/:id', async (req: AdminRequest, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const announcement = await prisma.announcement.findUnique({
+      where: { id },
+    });
+    
+    if (!announcement) {
+      return res.status(404).json({ error: 'Aviso não encontrado' });
+    }
+    
+    res.json(announcement);
+  } catch (error: any) {
+    console.error('Error fetching announcement:', error);
+    res.status(500).json({ error: 'Erro ao buscar aviso' });
+  }
+});
+
+// POST /api/admin/announcements - Cria um novo aviso
+router.post('/announcements', async (req: AdminRequest, res) => {
+  try {
+    const { title, description, imageUrl, link, type, isActive, order, startDate, endDate } = req.body;
+
+    if (!title) {
+      return res.status(400).json({ error: 'Título é obrigatório' });
+    }
+
+    const announcement = await prisma.announcement.create({
+      data: {
+        title,
+        description: description || null,
+        imageUrl: imageUrl || null,
+        link: link || null,
+        type: type || 'info',
+        isActive: isActive !== undefined ? isActive : true,
+        order: order || 0,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
+      },
+    });
+
+    // Audit logging
+    AuditService.log({
+      userId: req.adminUser?.id,
+      userEmail: req.adminUser?.email,
+      action: 'announcement_created',
+      resourceType: 'announcement',
+      resourceId: announcement.id,
+      ipAddress: req.ip || req.socket.remoteAddress || undefined,
+      userAgent: req.get('user-agent') || undefined,
+    }).catch((auditError) => {
+      console.warn('Failed to log audit (continuing):', auditError);
+    });
+
+    res.status(201).json(announcement);
+  } catch (error: any) {
+    console.error('Error creating announcement:', error);
+    res.status(500).json({ error: 'Erro ao criar aviso' });
+  }
+});
+
+// PUT /api/admin/announcements/:id - Atualiza um aviso
+router.put('/announcements/:id', async (req: AdminRequest, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { title, description, imageUrl, link, type, isActive, order, startDate, endDate } = req.body;
+
+    const announcement = await prisma.announcement.update({
+      where: { id },
+      data: {
+        title,
+        description: description !== undefined ? (description || null) : undefined,
+        imageUrl: imageUrl !== undefined ? (imageUrl || null) : undefined,
+        link: link !== undefined ? (link || null) : undefined,
+        type,
+        isActive,
+        order,
+        startDate: startDate !== undefined ? (startDate ? new Date(startDate) : null) : undefined,
+        endDate: endDate !== undefined ? (endDate ? new Date(endDate) : null) : undefined,
+      },
+    });
+
+    // Audit logging
+    AuditService.log({
+      userId: req.adminUser?.id,
+      userEmail: req.adminUser?.email,
+      action: 'announcement_updated',
+      resourceType: 'announcement',
+      resourceId: announcement.id,
+      ipAddress: req.ip || req.socket.remoteAddress || undefined,
+      userAgent: req.get('user-agent') || undefined,
+    }).catch((auditError) => {
+      console.warn('Failed to log audit (continuing):', auditError);
+    });
+
+    res.json(announcement);
+  } catch (error: any) {
+    console.error('Error updating announcement:', error);
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Aviso não encontrado' });
+    }
+    res.status(500).json({ error: 'Erro ao atualizar aviso' });
+  }
+});
+
+// DELETE /api/admin/announcements/:id - Remove um aviso
+router.delete('/announcements/:id', async (req: AdminRequest, res) => {
+  try {
+    const id = parseInt(req.params.id);
+
+    // Audit logging antes de deletar
+    const announcement = await prisma.announcement.findUnique({ where: { id } });
+    if (announcement) {
+      AuditService.log({
+        userId: req.adminUser?.id,
+        userEmail: req.adminUser?.email,
+        action: 'announcement_deleted',
+        resourceType: 'announcement',
+        resourceId: announcement.id,
+        ipAddress: req.ip || req.socket.remoteAddress || undefined,
+        userAgent: req.get('user-agent') || undefined,
+      }).catch((auditError) => {
+        console.warn('Failed to log audit (continuing):', auditError);
+      });
+    }
+
+    await prisma.announcement.delete({
+      where: { id },
+    });
+
+    res.json({ message: 'Aviso removido com sucesso' });
+  } catch (error: any) {
+    console.error('Error deleting announcement:', error);
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Aviso não encontrado' });
+    }
+    res.status(500).json({ error: 'Erro ao remover aviso' });
+  }
+});
+
 export default router;
 

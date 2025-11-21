@@ -681,3 +681,47 @@ export const themeAPI = {
   },
 };
 
+// Announcements API
+export const announcementsAPI = {
+  getAll: async () => {
+    const response = await api.get('/admin/announcements');
+    return response.data;
+  },
+  getById: async (id: number) => {
+    const response = await api.get(`/admin/announcements/${id}`);
+    return response.data;
+  },
+  create: async (data: {
+    title: string;
+    description?: string;
+    imageUrl?: string;
+    link?: string;
+    type?: string;
+    isActive?: boolean;
+    order?: number;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    const response = await api.post('/admin/announcements', data);
+    return response.data;
+  },
+  update: async (id: number, data: {
+    title?: string;
+    description?: string;
+    imageUrl?: string;
+    link?: string;
+    type?: string;
+    isActive?: boolean;
+    order?: number;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    const response = await api.put(`/admin/announcements/${id}`, data);
+    return response.data;
+  },
+  delete: async (id: number) => {
+    const response = await api.delete(`/admin/announcements/${id}`);
+    return response.data;
+  },
+};
+
