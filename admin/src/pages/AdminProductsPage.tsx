@@ -127,7 +127,7 @@ export function AdminProductsPage() {
       stock: product.stock.toString(),
       sizes: Array.isArray(product.sizes) ? product.sizes : [],
       colors: Array.isArray(product.colors) ? product.colors : [],
-      gender: product.gender || '',
+      gender: product.gender || 'none',
       featured: product.featured,
     });
     setIsDialogOpen(true);
@@ -159,7 +159,7 @@ export function AdminProductsPage() {
         stock: parseInt(formData.stock),
         sizes: formData.sizes,
         colors: formData.colors,
-        gender: formData.gender || undefined, // Opcional: 'menino', 'menina', 'outros' ou undefined
+        gender: formData.gender === 'none' ? undefined : (formData.gender || undefined), // Opcional: 'menino', 'menina', 'outros' ou undefined
       };
 
       let productId: number;
@@ -197,7 +197,7 @@ export function AdminProductsPage() {
       stock: '',
       sizes: [],
       colors: [],
-      gender: '',
+            gender: 'none',
       featured: false,
     });
     setEditingProduct(null);
@@ -507,14 +507,14 @@ export function AdminProductsPage() {
               <div>
                 <Label htmlFor="gender">Gênero (Opcional)</Label>
                 <Select
-                  value={formData.gender}
-                  onValueChange={(value) => setFormData({ ...formData, gender: value })}
+                  value={formData.gender || undefined}
+                  onValueChange={(value) => setFormData({ ...formData, gender: value === 'none' ? '' : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o gênero (opcional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="none">Nenhum</SelectItem>
                     <SelectItem value="menino">Menino</SelectItem>
                     <SelectItem value="menina">Menina</SelectItem>
                     <SelectItem value="outros">Outros</SelectItem>
