@@ -153,18 +153,44 @@ export function AdminProductsPage() {
     setSubmitting(true);
 
     try {
+      // Validação básica no frontend antes de enviar
+      if (!formData.name || !formData.description || !formData.price || !formData.image) {
+        const missing: string[] = [];
+        if (!formData.name) missing.push('nome');
+        if (!formData.description) missing.push('descrição');
+        if (!formData.price) missing.push('preço');
+        if (!formData.image) missing.push('imagem');
+        toast.error(`Preencha os campos obrigatórios: ${missing.join(', ')}`);
+        setSubmitting(false);
+        return;
+      }
+      
+      if (formData.categoryIds.length === 0) {
+        toast.error('Selecione pelo menos uma categoria');
+        setSubmitting(false);
+        return;
+      }
+      
       const productData = {
         ...formData,
         detailedDescription: formData.detailedDescription || undefined,
         price: parseFloat(formData.price),
         originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
         categoryIds: formData.categoryIds.map(id => parseInt(id)), // NOVO - Array de IDs de categorias (v2.0)
-        stock: parseInt(formData.stock),
+        stock: parseInt(formData.stock) || 0,
         sizes: formData.sizes,
         colors: formData.colors,
         gender: formData.gender === 'none' ? undefined : (formData.gender || undefined), // Opcional: 'menino', 'menina', 'outros' ou undefined
         keywords: formData.keywords?.trim() || null, // NOVO - Palavras-chave (opcional) - enviar null se vazio para garantir atualização
       };
+      
+      console.log('Enviando dados do produto:', {
+        name: productData.name,
+        description: productData.description,
+        price: productData.price,
+        image: !!productData.image,
+        categoryIds: productData.categoryIds,
+      });
 
       let productId: number;
       if (editingProduct) {
