@@ -37,7 +37,8 @@ interface Product {
   price: number;
   originalPrice?: number;
   image: string;
-  category: any;
+  category?: any; // Mantido para compatibilidade (categoria principal)
+  categories?: any[]; // NOVO - Array de categorias (v2.0)
   stock: number;
   sizes: string[];
   colors: string[];
@@ -66,7 +67,7 @@ export function AdminProductsPage() {
     detailedDescription: '',
     price: '',
     originalPrice: '',
-    categoryId: '',
+    categoryIds: [] as string[], // NOVO - Array de IDs de categorias (v2.0)
     image: '',
     stock: '',
     sizes: [] as string[],
@@ -90,9 +91,6 @@ export function AdminProductsPage() {
       ]);
       setProducts(productsData);
       setCategories(categoriesData);
-      if (categoriesData.length > 0 && !formData.categoryId) {
-        setFormData((prev) => ({ ...prev, categoryId: categoriesData[0].id.toString() }));
-      }
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Erro ao carregar dados');
@@ -110,13 +108,21 @@ export function AdminProductsPage() {
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    // Extrair IDs das categorias (suporta tanto category quanto categories)
+    const categoryIds: string[] = [];
+    if (product.categories && Array.isArray(product.categories)) {
+      categoryIds.push(...product.categories.map((cat: any) => cat.categoryId?.toString() || cat.id?.toString() || ''));
+    } else if (product.category) {
+      categoryIds.push((product.category as any)?.id?.toString() || '');
+    }
+    
     setFormData({
       name: product.name,
       description: product.description,
       detailedDescription: product.detailedDescription || '',
       price: product.price.toString(),
       originalPrice: product.originalPrice?.toString() || '',
-      categoryId: (product.category as any)?.id?.toString() || '',
+      categoryIds: categoryIds.filter(id => id), // Remover IDs vazios
       image: product.image,
       stock: product.stock.toString(),
       sizes: Array.isArray(product.sizes) ? product.sizes : [],
@@ -149,7 +155,7 @@ export function AdminProductsPage() {
         detailedDescription: formData.detailedDescription || undefined,
         price: parseFloat(formData.price),
         originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
-        categoryId: parseInt(formData.categoryId),
+        categoryIds: formData.categoryIds.map(id => parseInt(id)), // NOVO - Array de IDs de categorias (v2.0)
         stock: parseInt(formData.stock),
         sizes: formData.sizes,
         colors: formData.colors,
@@ -168,7 +174,8 @@ export function AdminProductsPage() {
         productId = newProduct.id;
         toast.success('Produto criado com sucesso! Agora você pode adicionar imagens.');
         // Manter dialog aberto para adicionar imagens
-        setEditingProduct({ ...productData, id: productId, category: categories.find(c => c.id.toString() === formData.categoryId) } as Product);
+        const selectedCategories = categories.filter(c => formData.categoryIds.includes(c.id.toString()));
+        setEditingProduct({ ...productData, id: productId, categories: selectedCategories } as Product);
       }
       loadData();
     } catch (error) {
@@ -185,7 +192,7 @@ export function AdminProductsPage() {
       detailedDescription: '',
       price: '',
       originalPrice: '',
-      categoryId: categories[0]?.id.toString() || '',
+      categoryIds: [], // NOVO - Array vazio (v2.0)
       image: '',
       stock: '',
       sizes: [],
@@ -220,8 +227,14 @@ export function AdminProductsPage() {
     setFormData({ ...formData, colors: formData.colors.filter(c => c !== color) });
   };
 
-  const getCategoryName = (product: Product) => {
-    return (product.category as any)?.name || 'Sem categoria';
+  const getCategoryNames = (product: Product) => {
+    if (product.categories && Array.isArray(product.categories) && product.categories.length > 0) {
+      return product.categories.map((pc: any) => pc.category?.name || pc.name || 'Sem nome').join(', ');
+    }
+    if (product.category) {
+      return (product.category as any)?.name || 'Sem categoria';
+    }
+    return 'Sem categoria';
   };
 
   // Filtrar produtos baseado na busca
@@ -331,23 +344,68 @@ export function AdminProductsPage() {
                   />
                 </div>
               </div>
+              {/* Categorias - Seleção Múltipla */}
               <div>
-                <Label htmlFor="categoryId">Categoria</Label>
-                <Select
-                  value={formData.categoryId}
-                  onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id.toString()}>
-                        {cat.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Categorias</Label>
+                <div className="mt-2 space-y-2">
+                  {categories.map((cat) => {
+                    const isSelected = formData.categoryIds.includes(cat.id.toString());
+                    return (
+                      <div key={cat.id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`category-${cat.id}`}
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({
+                                ...formData,
+                                categoryIds: [...formData.categoryIds, cat.id.toString()],
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                categoryIds: formData.categoryIds.filter(id => id !== cat.id.toString()),
+                              });
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <Label htmlFor={`category-${cat.id}`} className="text-sm font-normal cursor-pointer">
+                          {cat.name}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
+                {formData.categoryIds.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {formData.categoryIds.map((catId) => {
+                      const category = categories.find(c => c.id.toString() === catId);
+                      if (!category) return null;
+                      return (
+                        <Badge key={catId} variant="secondary" className="flex items-center gap-1">
+                          {category.name}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                categoryIds: formData.categoryIds.filter(id => id !== catId),
+                              });
+                            }}
+                            className="ml-1 hover:text-red-600"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Selecione uma ou mais categorias para este produto
+                </p>
               </div>
               <div>
                 <Label htmlFor="image">URL da Imagem</Label>
@@ -551,7 +609,7 @@ export function AdminProductsPage() {
                   </div>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-700">
-                  {getCategoryName(product)}
+                  {getCategoryNames(product)}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-700">
                   R$ {product.price.toFixed(2)}

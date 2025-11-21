@@ -47,9 +47,24 @@ model Category {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   
-  products    Product[]
+  products    ProductCategory[]  // NOVO - Relacionamento many-to-many (v2.0)
   
   @@map("categories")
+}
+
+// Tabela de junção para relacionamento many-to-many entre Product e Category
+model ProductCategory {
+  id         Int      @id @default(autoincrement())
+  productId  Int
+  categoryId Int
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  
+  @@unique([productId, categoryId])  // Evitar duplicatas
+  @@index([productId])
+  @@index([categoryId])
+  @@map("product_categories")
 }
 
 model Product {
@@ -60,8 +75,6 @@ model Product {
   price             Decimal  @db.Decimal(10, 2)
   originalPrice     Decimal? @db.Decimal(10, 2)
   image           String   @db.Text  // Mantido para backward compatibility
-  categoryId        Int
-  category          Category @relation(fields: [categoryId], references: [id])
   sizes             String   @db.Text // JSON array as string
   colors            String   @db.Text // JSON array as string
   gender            String?  @db.VarChar(20) // NOVO - Gênero: 'menino', 'menina', 'outros' (opcional)
@@ -70,6 +83,7 @@ model Product {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   
+  categories    ProductCategory[]  // NOVO - Múltiplas categorias (v2.0)
   images        ProductImage[]  // NOVO - Múltiplas imagens (v1.2)
   variants      ProductVariant[] // NOVO - Variações do produto (v2.0)
   orderItems    OrderItem[]

@@ -363,7 +363,13 @@ router.get('/products', async (req: AdminRequest, res) => {
       prisma.product.findMany({
         where,
         include: {
-          category: true,
+          categories: {
+            include: {
+              category: true,
+            },
+          },
+          // Manter category para compatibilidade (primeira categoria)
+          category: true, // Remover depois da migração completa
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -380,6 +386,8 @@ router.get('/products', async (req: AdminRequest, res) => {
       colors: JSON.parse(product.colors || '[]'),
       gender: product.gender || null,
       stock: product.stock || 0,
+      // Manter category para compatibilidade (primeira categoria)
+      category: product.categories?.[0]?.category || product.category || null,
     }));
 
     // Retornar array direto para compatibilidade com frontend
@@ -393,10 +401,21 @@ router.get('/products', async (req: AdminRequest, res) => {
 // Create product
 router.post('/products', async (req: AdminRequest, res) => {
   try {
-    const { name, description, detailedDescription, price, originalPrice, image, categoryId, sizes, colors, gender, featured, stock } = req.body;
+    const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, featured, stock } = req.body;
 
-    if (!name || !description || !price || !image || !categoryId) {
+    if (!name || !description || !price || !image) {
       return res.status(400).json({ error: 'Campos obrigatórios faltando' });
+    }
+
+    // Suportar tanto categoryIds (array) quanto categoryId (single) para compatibilidade
+    const categoryIdsArray = categoryIds && Array.isArray(categoryIds) 
+      ? categoryIds.map((id: any) => parseInt(id))
+      : categoryId 
+        ? [parseInt(categoryId)]
+        : [];
+
+    if (categoryIdsArray.length === 0) {
+      return res.status(400).json({ error: 'Selecione pelo menos uma categoria' });
     }
 
     const product = await prisma.product.create({
@@ -407,15 +426,25 @@ router.post('/products', async (req: AdminRequest, res) => {
         price: parseFloat(price),
         originalPrice: originalPrice ? parseFloat(originalPrice) : null,
         image,
-        categoryId: parseInt(categoryId),
         sizes: JSON.stringify(sizes || []),
         colors: JSON.stringify(colors || []),
         gender: gender || null, // Opcional: 'menino', 'menina', 'outros' ou null
         featured: featured || false,
         stock: parseInt(stock) || 0,
+        categories: {
+          create: categoryIdsArray.map((catId: number) => ({
+            categoryId: catId,
+          })),
+        },
       },
       include: {
-        category: true,
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+        // Manter category para compatibilidade
+        category: true, // Remover depois da migração completa
       },
     });
 
@@ -475,6 +504,8 @@ router.post('/products', async (req: AdminRequest, res) => {
       sizes: JSON.parse(product.sizes),
       colors: JSON.parse(product.colors),
       gender: product.gender || null,
+      // Manter category para compatibilidade (primeira categoria)
+      category: product.categories?.[0]?.category || null,
     };
 
     res.json(formattedProduct);
@@ -488,7 +519,7 @@ router.post('/products', async (req: AdminRequest, res) => {
 router.put('/products/:id', async (req: AdminRequest, res) => {
   try {
     const productId = parseInt(req.params.id);
-    const { name, description, detailedDescription, price, originalPrice, image, categoryId, sizes, colors, gender, featured, stock } = req.body;
+    const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, featured, stock } = req.body;
 
     // Get old product to check stock level
     const oldProduct = await prisma.product.findUnique({
@@ -496,24 +527,57 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
       select: { stock: true, name: true },
     });
 
+    // Suportar tanto categoryIds (array) quanto categoryId (single) para compatibilidade
+    const categoryIdsArray = categoryIds && Array.isArray(categoryIds)
+      ? categoryIds.map((id: any) => parseInt(id))
+      : categoryId !== undefined
+        ? [parseInt(categoryId)]
+        : undefined;
+
+    // Preparar dados de atualização
+    const updateData: any = {
+      name,
+      description,
+      detailedDescription: detailedDescription !== undefined ? (detailedDescription || null) : undefined,
+      price: price ? parseFloat(price) : undefined,
+      originalPrice: originalPrice !== undefined ? (originalPrice ? parseFloat(originalPrice) : null) : undefined,
+      image,
+      sizes: sizes ? JSON.stringify(sizes) : undefined,
+      colors: colors ? JSON.stringify(colors) : undefined,
+      gender: gender !== undefined ? (gender || null) : undefined, // Opcional: 'menino', 'menina', 'outros' ou null
+      featured,
+      stock: stock !== undefined ? parseInt(stock) : undefined,
+    };
+
+    // Se categoryIds foi fornecido, atualizar as categorias
+    if (categoryIdsArray !== undefined) {
+      if (categoryIdsArray.length === 0) {
+        return res.status(400).json({ error: 'Selecione pelo menos uma categoria' });
+      }
+      
+      // Deletar todas as categorias existentes e criar as novas
+      await prisma.productCategory.deleteMany({
+        where: { productId },
+      });
+      
+      updateData.categories = {
+        create: categoryIdsArray.map((catId: number) => ({
+          categoryId: catId,
+        })),
+      };
+    }
+
     const product = await prisma.product.update({
       where: { id: productId },
-      data: {
-        name,
-        description,
-        detailedDescription: detailedDescription !== undefined ? (detailedDescription || null) : undefined,
-        price: price ? parseFloat(price) : undefined,
-        originalPrice: originalPrice !== undefined ? (originalPrice ? parseFloat(originalPrice) : null) : undefined,
-        image,
-        categoryId: categoryId ? parseInt(categoryId) : undefined,
-        sizes: sizes ? JSON.stringify(sizes) : undefined,
-        colors: colors ? JSON.stringify(colors) : undefined,
-        gender: gender !== undefined ? (gender || null) : undefined, // Opcional: 'menino', 'menina', 'outros' ou null
-        featured,
-        stock: stock !== undefined ? parseInt(stock) : undefined,
-      },
+      data: updateData,
       include: {
-        category: true,
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+        // Manter category para compatibilidade
+        category: true, // Remover depois da migração completa
       },
     });
 
@@ -602,6 +666,8 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
       sizes: JSON.parse(product.sizes),
       colors: JSON.parse(product.colors),
       gender: product.gender || null,
+      // Manter category para compatibilidade (primeira categoria)
+      category: product.categories?.[0]?.category || null,
     };
 
     res.json(formattedProduct);
