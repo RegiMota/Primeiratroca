@@ -42,46 +42,82 @@ async function migrateCategories() {
       console.log('   Tentando criar a tabela manualmente...');
       
       try {
-        // Criar tabela manualmente
-        await prisma.$executeRaw`
-          CREATE TABLE IF NOT EXISTS product_categories (
-            id SERIAL PRIMARY KEY,
-            "productId" INTEGER NOT NULL,
-            "categoryId" INTEGER NOT NULL,
-            "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-            UNIQUE("productId", "categoryId")
-          );
-        `;
-        
-        // Criar índices
-        await prisma.$executeRaw`
-          CREATE INDEX IF NOT EXISTS idx_product_categories_product_id 
-          ON product_categories("productId");
-        `;
-        
-        await prisma.$executeRaw`
-          CREATE INDEX IF NOT EXISTS idx_product_categories_category_id 
-          ON product_categories("categoryId");
-        `;
-        
-        // Criar foreign keys
-        await prisma.$executeRaw`
-          ALTER TABLE product_categories
-          ADD CONSTRAINT IF NOT EXISTS fk_product_categories_product
-          FOREIGN KEY ("productId") REFERENCES products(id) ON DELETE CASCADE;
-        `;
-        
-        await prisma.$executeRaw`
-          ALTER TABLE product_categories
-          ADD CONSTRAINT IF NOT EXISTS fk_product_categories_category
-          FOREIGN KEY ("categoryId") REFERENCES categories(id) ON DELETE CASCADE;
-        `;
-        
-        console.log('✅ Tabela product_categories criada com sucesso!');
-        tableExists = true;
-      } catch (createError) {
+        // Criar tabela manualmente (PostgreSQL não suporta IF NOT EXISTS em ALTER TABLE ADD CONSTRAINT)
+        // Primeiro verificar se a tabela já existe de outra forma
+        try {
+          await prisma.$queryRaw`SELECT 1 FROM product_categories LIMIT 1`;
+          console.log('✅ Tabela product_categories já existe!');
+          tableExists = true;
+        } catch (e) {
+          // Tabela não existe, criar
+          console.log('   Criando tabela product_categories...');
+          
+          await prisma.$executeRaw`
+            CREATE TABLE product_categories (
+              id SERIAL PRIMARY KEY,
+              "productId" INTEGER NOT NULL,
+              "categoryId" INTEGER NOT NULL,
+              "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE("productId", "categoryId")
+            );
+          `;
+          
+          // Criar índices
+          await prisma.$executeRaw`
+            CREATE INDEX idx_product_categories_product_id 
+            ON product_categories("productId");
+          `;
+          
+          await prisma.$executeRaw`
+            CREATE INDEX idx_product_categories_category_id 
+            ON product_categories("categoryId");
+          `;
+          
+          // Criar foreign keys (sem IF NOT EXISTS, verificar se já existem antes)
+          try {
+            await prisma.$executeRaw`
+              ALTER TABLE product_categories
+              ADD CONSTRAINT fk_product_categories_product
+              FOREIGN KEY ("productId") REFERENCES products(id) ON DELETE CASCADE;
+            `;
+          } catch (fkError: any) {
+            if (fkError.message?.includes('already exists') || fkError.code === '42710') {
+              console.log('   Foreign key fk_product_categories_product já existe');
+            } else {
+              throw fkError;
+            }
+          }
+          
+          try {
+            await prisma.$executeRaw`
+              ALTER TABLE product_categories
+              ADD CONSTRAINT fk_product_categories_category
+              FOREIGN KEY ("categoryId") REFERENCES categories(id) ON DELETE CASCADE;
+            `;
+          } catch (fkError: any) {
+            if (fkError.message?.includes('already exists') || fkError.code === '42710') {
+              console.log('   Foreign key fk_product_categories_category já existe');
+            } else {
+              throw fkError;
+            }
+          }
+          
+          console.log('✅ Tabela product_categories criada com sucesso!');
+          tableExists = true;
+        }
+      } catch (createError: any) {
         console.error('❌ Erro ao criar tabela:', createError.message);
-        console.log('   Execute manualmente: npx prisma db push --force-reset');
+        console.error('   Código:', createError.code);
+        console.log('   Tentando forçar criação via Prisma...');
+        
+        // Tentar forçar via Prisma
+        try {
+          await prisma.$executeRaw`DROP TABLE IF EXISTS product_categories CASCADE;`;
+          // Depois executar db push novamente
+          console.log('   Execute: docker-compose exec backend npx prisma db push --force-reset');
+        } catch (dropError) {
+          console.error('   Erro ao dropar tabela:', dropError);
+        }
         process.exit(1);
       }
     } else {
