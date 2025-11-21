@@ -83,10 +83,12 @@ export const authRateLimiter = rateLimit({
 /**
  * Rate Limiter para API Admin
  * Limite mais restritivo para rotas administrativas
+ * Muito mais permissivo em desenvolvimento para evitar 429 durante uso normal
  */
 export const adminRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 50, // 50 requisições por IP a cada 15 minutos
+  // Aumentar drasticamente o limite em desenvolvimento para evitar 429 durante uso normal do admin
+  max: process.env.NODE_ENV === 'production' ? 200 : 2000, // Produção: 200, Desenvolvimento: 2000
   message: {
     error: 'Muitas requisições administrativas. Tente novamente em 15 minutos.',
   },
@@ -97,6 +99,10 @@ export const adminRateLimiter = rateLimit({
       error: 'Muitas requisições administrativas. Tente novamente em 15 minutos.',
       retryAfter: Math.ceil(15 * 60),
     });
+  },
+  // Desabilitar completamente em desenvolvimento se DISABLE_RATE_LIMIT=true
+  skip: (req: Request) => {
+    return process.env.NODE_ENV !== 'production' && process.env.DISABLE_RATE_LIMIT === 'true';
   },
 });
 
