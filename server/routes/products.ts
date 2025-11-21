@@ -233,10 +233,23 @@ router.get('/', async (req, res) => {
     console.error('Get products error:', error);
     console.error('Error details:', error.message);
     console.error('Error stack:', error.stack);
-    res.status(500).json({ 
+    console.error('Error code:', error.code);
+    console.error('Error meta:', error.meta);
+    
+    // Retornar mais detalhes em desenvolvimento para facilitar debug
+    const errorResponse: any = {
       error: 'Erro ao buscar produtos',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    };
+    
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production') {
+      errorResponse.details = error.message;
+      errorResponse.code = error.code;
+      if (error.meta) {
+        errorResponse.meta = error.meta;
+      }
+    }
+    
+    res.status(500).json(errorResponse);
   }
 });
 
