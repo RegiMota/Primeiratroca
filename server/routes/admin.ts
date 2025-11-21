@@ -627,15 +627,27 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
       }
     }
     
+    // Retornar mensagem de erro mais detalhada
+    const errorMessage = error.message || 'Erro desconhecido ao criar produto';
+    const errorCode = error.code || 'UNKNOWN';
+    
+    // Mensagem mais amigável para o usuário
+    let userFriendlyMessage = 'Erro ao criar produto';
+    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
+      userFriendlyMessage = 'O campo keywords não existe no banco de dados. Execute a migração do Prisma.';
+    } else if (error.message?.includes('category')) {
+      userFriendlyMessage = 'Erro ao associar categorias ao produto. Verifique se as categorias existem.';
+    } else if (error.message?.includes('constraint') || error.message?.includes('unique')) {
+      userFriendlyMessage = 'Já existe um produto com esses dados. Verifique os campos únicos.';
+    }
+    
     res.status(500).json({ 
-      error: 'Erro ao criar produto',
-      details: process.env.NODE_ENV === 'development' ? {
-        message: error.message,
-        code: error.code,
-        hint: error.code === 'P2009' || error.message?.includes('keywords')
-          ? 'O campo keywords pode não existir no banco de dados. Execute: npx prisma db push'
-          : undefined
-      } : undefined
+      error: userFriendlyMessage,
+      details: errorMessage,
+      code: errorCode,
+      hint: error.code === 'P2009' || error.message?.includes('keywords')
+        ? 'Execute: docker-compose exec backend npx prisma db push --accept-data-loss'
+        : undefined
     });
   }
 });
