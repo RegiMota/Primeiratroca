@@ -166,24 +166,54 @@ router.get('/', async (req, res) => {
 
     // Parse JSON strings and convert Decimal to number
     const formattedProducts = products.map((product) => {
-      // Extrair categorias do relacionamento many-to-many
-      const categories = product.categories?.map((pc: any) => pc.category) || [];
-      // Manter category para compatibilidade (primeira categoria)
-      const category = categories[0] || null;
-      
-      return {
-        ...product,
-        price: Number(product.price),
-        originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
-        sizes: JSON.parse(product.sizes),
-        colors: JSON.parse(product.colors),
-        // Use images array if available, otherwise fallback to image field
-        image: product.images && product.images.length > 0 
-          ? product.images[0].url 
-          : product.image,
-        // Manter category para compatibilidade
-        category,
-      };
+      try {
+        // Extrair categorias do relacionamento many-to-many
+        const categories = product.categories?.map((pc: any) => pc.category) || [];
+        // Manter category para compatibilidade (primeira categoria)
+        const category = categories[0] || null;
+        
+        // Parse sizes e colors com tratamento de erro
+        let sizes = [];
+        let colors = [];
+        try {
+          sizes = typeof product.sizes === 'string' ? JSON.parse(product.sizes) : (product.sizes || []);
+        } catch (e) {
+          console.warn(`Erro ao parse sizes do produto ${product.id}:`, e);
+          sizes = [];
+        }
+        try {
+          colors = typeof product.colors === 'string' ? JSON.parse(product.colors) : (product.colors || []);
+        } catch (e) {
+          console.warn(`Erro ao parse colors do produto ${product.id}:`, e);
+          colors = [];
+        }
+        
+        return {
+          ...product,
+          price: Number(product.price),
+          originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+          sizes,
+          colors,
+          // Use images array if available, otherwise fallback to image field
+          image: product.images && product.images.length > 0 
+            ? product.images[0].url 
+            : product.image,
+          // Manter category para compatibilidade
+          category,
+        };
+      } catch (error) {
+        console.error(`Erro ao formatar produto ${product.id}:`, error);
+        // Retornar produto com valores padrão em caso de erro
+        return {
+          ...product,
+          price: Number(product.price) || 0,
+          originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+          sizes: [],
+          colors: [],
+          image: product.image || '',
+          category: null,
+        };
+      }
     });
 
     // Se há paginação, retornar com metadados
