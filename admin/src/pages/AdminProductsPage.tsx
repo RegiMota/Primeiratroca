@@ -43,6 +43,7 @@ interface Product {
   sizes: string[];
   colors: string[];
   gender?: string | null; // 'menino', 'menina', 'outros' ou null
+  keywords?: string | null; // NOVO - Palavras-chave para busca (oculto, opcional)
   featured: boolean;
 }
 
@@ -73,6 +74,7 @@ export function AdminProductsPage() {
     sizes: [] as string[],
     colors: [] as string[],
     gender: '' as string | '',
+    keywords: '', // NOVO - Palavras-chave para busca (oculto, opcional)
     featured: false,
   });
   const [newSize, setNewSize] = useState('');
@@ -128,6 +130,7 @@ export function AdminProductsPage() {
       sizes: Array.isArray(product.sizes) ? product.sizes : [],
       colors: Array.isArray(product.colors) ? product.colors : [],
       gender: product.gender || 'none',
+      keywords: product.keywords || '', // NOVO - Palavras-chave
       featured: product.featured,
     });
     setIsDialogOpen(true);
@@ -160,6 +163,7 @@ export function AdminProductsPage() {
         sizes: formData.sizes,
         colors: formData.colors,
         gender: formData.gender === 'none' ? undefined : (formData.gender || undefined), // Opcional: 'menino', 'menina', 'outros' ou undefined
+        keywords: formData.keywords?.trim() || undefined, // NOVO - Palavras-chave (opcional)
       };
 
       let productId: number;
@@ -192,6 +196,7 @@ export function AdminProductsPage() {
       detailedDescription: '',
       price: '',
       originalPrice: '',
+      keywords: '', // NOVO - Palavras-chave
       categoryIds: [], // NOVO - Array vazio (v2.0)
       image: '',
       stock: '',
@@ -522,6 +527,23 @@ export function AdminProductsPage() {
                 </Select>
                 <p className="text-xs text-gray-500 mt-1">
                   Especifique se o produto é para menino, menina ou outros
+                </p>
+              </div>
+
+              {/* Palavras-chave (Oculto) */}
+              <div>
+                <Label htmlFor="keywords">Palavras-chave (Opcional - Oculto)</Label>
+                <Textarea
+                  id="keywords"
+                  name="keywords"
+                  placeholder="Ex: rosa, camisa, verão, casual (separadas por vírgula ou espaço)"
+                  value={formData.keywords}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className="mt-1"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Palavras-chave para melhorar a busca. Este campo não aparece no produto. Separe múltiplas palavras por vírgula ou espaço.
                 </p>
               </div>
 

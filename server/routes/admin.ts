@@ -347,9 +347,11 @@ router.get('/products', async (req: AdminRequest, res) => {
     const where: any = {};
     if (search) {
       // Usar mode: 'insensitive' para busca case-insensitive (funciona com PostgreSQL)
+      // Incluir palavras-chave na busca (oculto)
       where.OR = [
         { name: { contains: search as string, mode: 'insensitive' } },
         { description: { contains: search as string, mode: 'insensitive' } },
+        { keywords: { contains: search as string, mode: 'insensitive' } }, // NOVO - Buscar em palavras-chave
       ];
     }
     if (categoryId) {
@@ -443,6 +445,7 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
         sizes: JSON.stringify(sizes || []),
         colors: JSON.stringify(colors || []),
         gender: gender || null, // Opcional: 'menino', 'menina', 'outros' ou null
+        keywords: keywords?.trim() || null, // NOVO - Palavras-chave para busca (oculto, opcional)
         featured: featured || false,
         stock: parseInt(stock) || 0,
         categories: {
@@ -557,6 +560,7 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
       sizes: sizes ? JSON.stringify(sizes) : undefined,
       colors: colors ? JSON.stringify(colors) : undefined,
       gender: gender !== undefined ? (gender || null) : undefined, // Opcional: 'menino', 'menina', 'outros' ou null
+      keywords: keywords !== undefined ? (keywords?.trim() || null) : undefined, // NOVO - Palavras-chave para busca (oculto, opcional)
       featured,
       stock: stock !== undefined ? parseInt(stock) : undefined,
     };
