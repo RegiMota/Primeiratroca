@@ -210,13 +210,24 @@ export function AdminProductsPage() {
       loadData();
     } catch (error: any) {
       console.error('Error saving product:', error);
+      console.error('Error response:', error.response?.data);
+      
       const errorMessage = error.response?.data?.error || error.response?.data?.details || error.message || 'Erro ao salvar produto';
       const missingFields = error.response?.data?.missingFields;
+      const hint = error.response?.data?.hint;
       
       if (missingFields && Array.isArray(missingFields)) {
         toast.error(`Erro ao salvar produto: Faltam os seguintes campos: ${missingFields.join(', ')}`);
       } else {
-        toast.error(errorMessage);
+        // Mostrar mensagem de erro e hint se disponível
+        if (hint) {
+          toast.error(errorMessage, {
+            description: hint,
+            duration: 10000, // 10 segundos para dar tempo de ler
+          });
+        } else {
+          toast.error(errorMessage);
+        }
       }
     } finally {
       setSubmitting(false);
