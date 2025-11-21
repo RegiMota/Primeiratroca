@@ -56,12 +56,13 @@ export const publicReadRateLimiter = rateLimit({
 /**
  * Rate Limiter para Autenticação
  * Limite mais restritivo para login/registro
- * Muito mais permissivo em desenvolvimento
+ * Muito mais permissivo em desenvolvimento e aumentado em produção para evitar bloqueios
  */
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  // Aumentar drasticamente o limite em desenvolvimento para evitar 429 durante testes
-  max: process.env.NODE_ENV === 'production' ? 5 : 100, // Produção: 5, Desenvolvimento: 100
+  // Aumentar limite em produção para evitar bloqueios durante uso normal
+  // Em desenvolvimento, limite muito alto para testes
+  max: process.env.NODE_ENV === 'production' ? 20 : 100, // Produção: 20 (aumentado de 5), Desenvolvimento: 100
   message: {
     error: 'Muitas tentativas de autenticação. Tente novamente em 15 minutos.',
   },
