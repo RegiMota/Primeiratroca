@@ -738,6 +738,7 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
     };
     
     console.log(`[PUT /products/${productId}] updateData.keywords:`, updateData.keywords);
+    console.log(`[PUT /products/${productId}] processedKeywords:`, processedKeywords);
 
     // Se categoryIds foi fornecido, atualizar as categorias
     // Se categoryIdsArray for undefined, não atualizar categorias (manter as existentes)
