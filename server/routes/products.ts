@@ -548,7 +548,8 @@ router.get('/search/suggestions', async (req, res) => {
         OR: [
           { name: { contains: searchTerm, mode: 'insensitive' } },
           { description: { contains: searchTerm, mode: 'insensitive' } },
-          { keywords: { contains: searchTerm, mode: 'insensitive' } }, // NOVO - Buscar em palavras-chave
+          // TODO: Reativar após aplicar migração do Prisma
+          // { keywords: { contains: searchTerm, mode: 'insensitive' } }, // NOVO - Buscar em palavras-chave
         ],
       },
       select: {
