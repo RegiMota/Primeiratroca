@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
 
     const where: any = {};
 
-    // Filtro por categoria
+    // Filtro por categoria (usando many-to-many)
     if (category && category !== 'All') {
       // Buscar a categoria pelo slug ou name
       const foundCategory = await prisma.category.findFirst({
@@ -40,7 +40,12 @@ router.get('/', async (req, res) => {
       });
       
       if (foundCategory) {
-        where.categoryId = foundCategory.id;
+        // Filtrar produtos que têm esta categoria usando a tabela de junção
+        where.categories = {
+          some: {
+            categoryId: foundCategory.id,
+          },
+        };
       } else {
         // Se não encontrar a categoria, retornar array vazio
         return res.json({
@@ -141,7 +146,13 @@ router.get('/', async (req, res) => {
     const products = await prisma.product.findMany({
       where,
       include: {
-        category: true,
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+        // Manter category para compatibilidade (primeira categoria)
+        category: true, // Remover depois da migração completa
         images: {
           orderBy: [
             { isPrimary: 'desc' },
@@ -156,17 +167,26 @@ router.get('/', async (req, res) => {
     });
 
     // Parse JSON strings and convert Decimal to number
-    const formattedProducts = products.map((product) => ({
-      ...product,
-      price: Number(product.price),
-      originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
-      sizes: JSON.parse(product.sizes),
-      colors: JSON.parse(product.colors),
-      // Use images array if available, otherwise fallback to image field
-      image: product.images && product.images.length > 0 
-        ? product.images[0].url 
-        : product.image,
-    }));
+    const formattedProducts = products.map((product) => {
+      // Extrair categorias do relacionamento many-to-many
+      const categories = product.categories?.map((pc: any) => pc.category) || [];
+      // Manter category para compatibilidade (primeira categoria)
+      const category = categories[0] || product.category || null;
+      
+      return {
+        ...product,
+        price: Number(product.price),
+        originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+        sizes: JSON.parse(product.sizes),
+        colors: JSON.parse(product.colors),
+        // Use images array if available, otherwise fallback to image field
+        image: product.images && product.images.length > 0 
+          ? product.images[0].url 
+          : product.image,
+        // Manter category para compatibilidade
+        category,
+      };
+    });
 
     // Se há paginação, retornar com metadados
     if (limitNum !== undefined) {
