@@ -52,53 +52,75 @@ async function migrateCategories() {
           // Tabela não existe, criar
           console.log('   Criando tabela product_categories...');
           
-          await prisma.$executeRaw`
-            CREATE TABLE product_categories (
+          await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS product_categories (
               id SERIAL PRIMARY KEY,
               "productId" INTEGER NOT NULL,
               "categoryId" INTEGER NOT NULL,
               "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
               UNIQUE("productId", "categoryId")
             );
-          `;
+          `);
           
-          // Criar índices
-          await prisma.$executeRaw`
-            CREATE INDEX idx_product_categories_product_id 
-            ON product_categories("productId");
-          `;
-          
-          await prisma.$executeRaw`
-            CREATE INDEX idx_product_categories_category_id 
-            ON product_categories("categoryId");
-          `;
-          
-          // Criar foreign keys (sem IF NOT EXISTS, verificar se já existem antes)
+          // Criar índices (com verificação manual)
           try {
-            await prisma.$executeRaw`
-              ALTER TABLE product_categories
-              ADD CONSTRAINT fk_product_categories_product
-              FOREIGN KEY ("productId") REFERENCES products(id) ON DELETE CASCADE;
-            `;
-          } catch (fkError: any) {
-            if (fkError.message?.includes('already exists') || fkError.code === '42710') {
-              console.log('   Foreign key fk_product_categories_product já existe');
-            } else {
-              throw fkError;
+            await prisma.$executeRawUnsafe(`
+              CREATE INDEX IF NOT EXISTS idx_product_categories_product_id 
+              ON product_categories("productId");
+            `);
+          } catch (idxError: any) {
+            if (!idxError.message?.includes('already exists') && idxError.code !== '42P07') {
+              console.log('   Aviso ao criar índice product_id:', idxError.message);
             }
           }
           
           try {
-            await prisma.$executeRaw`
-              ALTER TABLE product_categories
-              ADD CONSTRAINT fk_product_categories_category
-              FOREIGN KEY ("categoryId") REFERENCES categories(id) ON DELETE CASCADE;
-            `;
+            await prisma.$executeRawUnsafe(`
+              CREATE INDEX IF NOT EXISTS idx_product_categories_category_id 
+              ON product_categories("categoryId");
+            `);
+          } catch (idxError: any) {
+            if (!idxError.message?.includes('already exists') && idxError.code !== '42P07') {
+              console.log('   Aviso ao criar índice category_id:', idxError.message);
+            }
+          }
+          
+          // Criar foreign keys usando DO block (PostgreSQL não suporta IF NOT EXISTS em ALTER TABLE)
+          try {
+            await prisma.$executeRawUnsafe(`
+              DO $$
+              BEGIN
+                IF NOT EXISTS (
+                  SELECT 1 FROM pg_constraint WHERE conname = 'fk_product_categories_product'
+                ) THEN
+                  ALTER TABLE product_categories
+                  ADD CONSTRAINT fk_product_categories_product
+                  FOREIGN KEY ("productId") REFERENCES products(id) ON DELETE CASCADE;
+                END IF;
+              END $$;
+            `);
           } catch (fkError: any) {
-            if (fkError.message?.includes('already exists') || fkError.code === '42710') {
-              console.log('   Foreign key fk_product_categories_category já existe');
-            } else {
-              throw fkError;
+            if (!fkError.message?.includes('already exists') && fkError.code !== '42710') {
+              console.log('   Aviso ao criar foreign key product:', fkError.message);
+            }
+          }
+          
+          try {
+            await prisma.$executeRawUnsafe(`
+              DO $$
+              BEGIN
+                IF NOT EXISTS (
+                  SELECT 1 FROM pg_constraint WHERE conname = 'fk_product_categories_category'
+                ) THEN
+                  ALTER TABLE product_categories
+                  ADD CONSTRAINT fk_product_categories_category
+                  FOREIGN KEY ("categoryId") REFERENCES categories(id) ON DELETE CASCADE;
+                END IF;
+              END $$;
+            `);
+          } catch (fkError: any) {
+            if (!fkError.message?.includes('already exists') && fkError.code !== '42710') {
+              console.log('   Aviso ao criar foreign key category:', fkError.message);
             }
           }
           
