@@ -474,6 +474,7 @@ router.post('/products', async (req: AdminRequest, res) => {
       originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
       sizes: JSON.parse(product.sizes),
       colors: JSON.parse(product.colors),
+      gender: product.gender || null,
     };
 
     res.json(formattedProduct);
