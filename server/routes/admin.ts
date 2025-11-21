@@ -353,7 +353,12 @@ router.get('/products', async (req: AdminRequest, res) => {
       ];
     }
     if (categoryId) {
-      where.categoryId = parseInt(categoryId as string);
+      // Filtrar por categoria usando a tabela de junção
+      where.categories = {
+        some: {
+          categoryId: parseInt(categoryId as string),
+        },
+      };
     }
     if (featured !== undefined) {
       where.featured = featured === 'true';
