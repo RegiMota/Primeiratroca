@@ -406,7 +406,7 @@ router.get('/products', async (req: AdminRequest, res) => {
 // Create product
 router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, res) => {
   try {
-    const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, featured, stock } = req.body;
+    const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, keywords, featured, stock } = req.body;
 
     if (!name || !description || !price || !image) {
       return res.status(400).json({ error: 'Campos obrigatórios faltando' });
@@ -524,9 +524,76 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
     };
 
     res.json(formattedProduct);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create product error:', error);
-    res.status(500).json({ error: 'Erro ao criar produto' });
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message,
+      meta: error.meta,
+    });
+    
+    // Erro específico para campo desconhecido (keywords pode não existir no banco ainda)
+    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
+      // Tentar criar sem o campo keywords (caso o campo ainda não exista no banco)
+      try {
+        const productDataWithoutKeywords: any = {
+          name,
+          description,
+          detailedDescription: detailedDescription || null,
+          price: parseFloat(price),
+          originalPrice: originalPrice ? parseFloat(originalPrice) : null,
+          image,
+          sizes: JSON.stringify(sizes || []),
+          colors: JSON.stringify(colors || []),
+          gender: gender || null,
+          featured: featured || false,
+          stock: parseInt(stock) || 0,
+          categories: {
+            create: categoryIdsArray.map((catId: number) => ({
+              categoryId: catId,
+            })),
+          },
+        };
+        
+        const product = await prisma.product.create({
+          data: productDataWithoutKeywords,
+          include: {
+            categories: {
+              include: {
+                category: true,
+              },
+            },
+          },
+        });
+        
+        console.warn('Produto criado sem keywords (campo pode não existir no banco ainda)');
+        
+        const formattedProduct = {
+          ...product,
+          price: Number(product.price),
+          originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+          sizes: JSON.parse(product.sizes),
+          colors: JSON.parse(product.colors),
+          gender: product.gender || null,
+          category: product.categories?.[0]?.category || null,
+        };
+        
+        return res.json(formattedProduct);
+      } catch (retryError: any) {
+        console.error('Error on retry without keywords:', retryError);
+      }
+    }
+    
+    res.status(500).json({ 
+      error: 'Erro ao criar produto',
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        code: error.code,
+        hint: error.code === 'P2009' || error.message?.includes('keywords')
+          ? 'O campo keywords pode não existir no banco de dados. Execute: npx prisma db push'
+          : undefined
+      } : undefined
+    });
   }
 });
 
