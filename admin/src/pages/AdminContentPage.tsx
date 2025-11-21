@@ -671,9 +671,9 @@ export function AdminContentPage() {
                   setMediaPreview(null);
                 }
               }} className="mt-2">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="url">URL</TabsTrigger>
-                  <TabsTrigger value="upload">Upload</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger value="url" className="cursor-pointer">🔗 URL</TabsTrigger>
+                  <TabsTrigger value="upload" className="cursor-pointer">📁 Upload do Computador</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="url" className="space-y-2">
@@ -710,16 +710,32 @@ export function AdminContentPage() {
                 </TabsContent>
                 
                 <TabsContent value="upload" className="space-y-2">
-                  <Input
-                    id="mediaFile"
-                    type="file"
-                    accept="image/*,video/*"
-                    onChange={handleFileSelect}
-                    disabled={uploadingMedia}
-                    className="cursor-pointer"
-                  />
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                    <Input
+                      id="mediaFile"
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={handleFileSelect}
+                      disabled={uploadingMedia}
+                      className="cursor-pointer hidden"
+                    />
+                    <Label htmlFor="mediaFile" className="cursor-pointer">
+                      <div className="flex flex-col items-center gap-2">
+                        <FileImage className="h-12 w-12 text-gray-400" />
+                        <span className="text-sm font-medium text-gray-700">
+                          Clique para selecionar um arquivo
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ou arraste e solte aqui
+                        </span>
+                        <span className="text-xs text-gray-400 mt-1">
+                          Imagens, vídeos ou GIFs (máx. 100MB)
+                        </span>
+                      </div>
+                    </Label>
+                  </div>
                   <p className="text-xs text-gray-500">
-                    Faça upload de uma imagem, vídeo ou GIF do seu dispositivo (máx. 100MB)
+                    Faça upload de uma imagem, vídeo ou GIF do seu computador
                   </p>
                   {mediaPreview && (
                     <div className="mt-2 relative">
