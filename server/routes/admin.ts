@@ -475,34 +475,74 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
     
     console.log('[POST /products] Keywords processado para criação:', processedKeywords);
 
-    const product = await prisma.product.create({
-      data: {
-        name,
-        description,
-        detailedDescription: detailedDescription || null,
-        price: parseFloat(price),
-        originalPrice: originalPrice ? parseFloat(originalPrice) : null,
-        image,
-        sizes: JSON.stringify(sizes || []),
-        colors: JSON.stringify(colors || []),
-        gender: gender || null, // Opcional: 'menino', 'menina', 'outros' ou null
-        keywords: processedKeywords, // NOVO - Palavras-chave para busca (oculto, opcional)
-        featured: featured || false,
-        stock: parseInt(stock) || 0,
-        categories: {
-          create: categoryIdsArray.map((catId: number) => ({
-            categoryId: catId,
-          })),
-        },
+    // Preparar dados base do produto
+    const baseProductData = {
+      name,
+      description,
+      detailedDescription: detailedDescription || null,
+      price: parseFloat(price),
+      originalPrice: originalPrice ? parseFloat(originalPrice) : null,
+      image,
+      sizes: JSON.stringify(sizes || []),
+      colors: JSON.stringify(colors || []),
+      gender: gender || null, // Opcional: 'menino', 'menina', 'outros' ou null
+      featured: featured || false,
+      stock: parseInt(stock) || 0,
+      categories: {
+        create: categoryIdsArray.map((catId: number) => ({
+          categoryId: catId,
+        })),
       },
-      include: {
-        categories: {
-          include: {
-            category: true,
+    };
+
+    // Tentar criar produto com keywords primeiro
+    let product;
+    try {
+      product = await prisma.product.create({
+        data: {
+          ...baseProductData,
+          keywords: processedKeywords, // NOVO - Palavras-chave para busca (oculto, opcional)
+        },
+        include: {
+          categories: {
+            include: {
+              category: true,
+            },
           },
         },
-      },
-    });
+      });
+      console.log('[POST /products] Produto criado com keywords');
+    } catch (firstError: any) {
+      // Se o erro for relacionado ao campo keywords não existir, tentar sem keywords
+      const isKeywordsError = 
+        firstError.code === 'P2009' || 
+        firstError.message?.includes('Unknown field') || 
+        firstError.message?.includes('keywords') ||
+        firstError.message?.includes('Unknown argument');
+      
+      if (isKeywordsError) {
+        console.warn('[POST /products] Campo keywords não existe, tentando criar sem keywords...');
+        try {
+          product = await prisma.product.create({
+            data: baseProductData, // Sem keywords
+            include: {
+              categories: {
+                include: {
+                  category: true,
+                },
+              },
+            },
+          });
+          console.log('[POST /products] Produto criado sem keywords (campo não existe no banco)');
+        } catch (secondError: any) {
+          console.error('[POST /products] Erro ao criar produto sem keywords:', secondError);
+          throw secondError; // Lançar o segundo erro (mais específico)
+        }
+      } else {
+        // Se não for erro de keywords, lançar o erro original
+        throw firstError;
+      }
+    }
 
     // Se o produto tem estoque, criar uma variação padrão automaticamente
     const stockAmount = parseInt(stock) || 0;
