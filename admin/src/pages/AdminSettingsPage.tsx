@@ -189,15 +189,15 @@ export function AdminSettingsPage() {
 
       <Tabs defaultValue="logo" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="logo">
+          <TabsTrigger value="logo" className="cursor-pointer">
             <ImageIcon className="mr-2 h-4 w-4" />
             Logo
           </TabsTrigger>
-          <TabsTrigger value="favicon">
+          <TabsTrigger value="favicon" className="cursor-pointer">
             <ImageIcon className="mr-2 h-4 w-4" />
             Favicon
           </TabsTrigger>
-          <TabsTrigger value="styling">
+          <TabsTrigger value="styling" className="cursor-pointer relative z-10">
             <Palette className="mr-2 h-4 w-4" />
             Estilização
           </TabsTrigger>
