@@ -402,7 +402,7 @@ router.get('/products', async (req: AdminRequest, res) => {
 });
 
 // Create product
-router.post('/products', async (req: AdminRequest, res) => {
+router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, res) => {
   try {
     const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, featured, stock } = req.body;
 
@@ -411,11 +411,22 @@ router.post('/products', async (req: AdminRequest, res) => {
     }
 
     // Suportar tanto categoryIds (array) quanto categoryId (single) para compatibilidade
-    const categoryIdsArray = categoryIds && Array.isArray(categoryIds) 
-      ? categoryIds.map((id: any) => parseInt(id))
-      : categoryId 
-        ? [parseInt(categoryId)]
-        : [];
+    let categoryIdsArray: number[] = [];
+    if (categoryIds && Array.isArray(categoryIds)) {
+      categoryIdsArray = categoryIds.map((id: any) => {
+        const parsed = parseInt(id);
+        if (isNaN(parsed)) {
+          throw new Error(`ID de categoria inválido: ${id}`);
+        }
+        return parsed;
+      });
+    } else if (categoryId) {
+      const parsed = parseInt(categoryId);
+      if (isNaN(parsed)) {
+        throw new Error(`ID de categoria inválido: ${categoryId}`);
+      }
+      categoryIdsArray = [parsed];
+    }
 
     if (categoryIdsArray.length === 0) {
       return res.status(400).json({ error: 'Selecione pelo menos uma categoria' });
@@ -446,8 +457,6 @@ router.post('/products', async (req: AdminRequest, res) => {
             category: true,
           },
         },
-        // Manter category para compatibilidade
-        category: true, // Remover depois da migração completa
       },
     });
 
@@ -579,8 +588,6 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
             category: true,
           },
         },
-        // Manter category para compatibilidade
-        category: true, // Remover depois da migração completa
       },
     });
 
