@@ -151,8 +151,6 @@ router.get('/', async (req, res) => {
             category: true,
           },
         },
-        // Manter category para compatibilidade (primeira categoria)
-        category: true, // Remover depois da migração completa
         images: {
           orderBy: [
             { isPrimary: 'desc' },
@@ -171,7 +169,7 @@ router.get('/', async (req, res) => {
       // Extrair categorias do relacionamento many-to-many
       const categories = product.categories?.map((pc: any) => pc.category) || [];
       // Manter category para compatibilidade (primeira categoria)
-      const category = categories[0] || product.category || null;
+      const category = categories[0] || null;
       
       return {
         ...product,
@@ -224,7 +222,11 @@ router.get('/best-selling', async (req, res) => {
     try {
       allProducts = await prisma.product.findMany({
         include: {
-          category: true,
+          categories: {
+            include: {
+              category: true,
+            },
+          },
           images: {
             orderBy: [
               { isPrimary: 'desc' },
@@ -248,7 +250,11 @@ router.get('/best-selling', async (req, res) => {
       // Se houver erro na query, tentar buscar sem orderItems
       allProducts = await prisma.product.findMany({
         include: {
-          category: true,
+          categories: {
+            include: {
+              category: true,
+            },
+          },
           images: {
             orderBy: [
               { isPrimary: 'desc' },
@@ -386,9 +392,13 @@ router.get('/search/suggestions', async (req, res) => {
       select: {
         id: true,
         name: true,
-        category: {
-          select: {
-            name: true,
+        categories: {
+          include: {
+            category: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
@@ -399,11 +409,14 @@ router.get('/search/suggestions', async (req, res) => {
     });
 
     // Formatar sugestões
-    const suggestions = products.map((product) => ({
-      id: product.id,
-      name: product.name,
-      category: product.category?.name || '',
-    }));
+    const suggestions = products.map((product) => {
+      const categoryName = product.categories?.[0]?.category?.name || '';
+      return {
+        id: product.id,
+        name: product.name,
+        category: categoryName,
+      };
+    });
 
     res.json(suggestions);
   } catch (error) {
@@ -418,7 +431,11 @@ router.get('/:id', async (req, res) => {
     const product = await prisma.product.findUnique({
       where: { id: parseInt(req.params.id) },
       include: {
-        category: true,
+        categories: {
+          include: {
+            category: true,
+          },
+        },
         images: {
           orderBy: [
             { isPrimary: 'desc' },
@@ -433,6 +450,10 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
 
+    // Extrair categorias do relacionamento many-to-many
+    const categories = product.categories?.map((pc: any) => pc.category) || [];
+    const category = categories[0] || null;
+
     const formattedProduct = {
       ...product,
       price: Number(product.price),
@@ -443,6 +464,8 @@ router.get('/:id', async (req, res) => {
       image: product.images && product.images.length > 0 
         ? product.images[0].url 
         : product.image,
+      // Manter category para compatibilidade
+      category,
     };
 
     res.json(formattedProduct);

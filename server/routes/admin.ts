@@ -373,8 +373,6 @@ router.get('/products', async (req: AdminRequest, res) => {
               category: true,
             },
           },
-          // Manter category para compatibilidade (primeira categoria)
-          category: true, // Remover depois da migração completa
         },
         orderBy: { createdAt: 'desc' },
         skip,
