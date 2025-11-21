@@ -420,7 +420,8 @@ router.get('/search/suggestions', async (req, res) => {
   try {
     const { q } = req.query;
 
-    if (!q || (q as string).trim().length < 2) {
+    // Aceitar busca a partir de 1 caractere para resposta mais rápida
+    if (!q || (q as string).trim().length < 1) {
       return res.json([]);
     }
 

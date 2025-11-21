@@ -262,7 +262,7 @@ export const productsAPI = {
   },
 
   getSearchSuggestions: async (q: string) => {
-    if (!q || q.trim().length < 2) {
+    if (!q || q.trim().length < 1) {
       return [];
     }
     const response = await api.get('/products/search/suggestions', { params: { q } });

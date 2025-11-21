@@ -25,11 +25,12 @@ export function SearchBar({ onSearch, inputRef }: SearchBarProps) {
 
   useEffect(() => {
     const loadSuggestions = async () => {
-      if (query.trim().length >= 2) {
+      // Mostrar sugestões a partir de 1 caractere (mais responsivo)
+      if (query.trim().length >= 1) {
         try {
           const data = await productsAPI.getSearchSuggestions(query);
           setSuggestions(data);
-          setShowSuggestions(data.length > 0);
+          setShowSuggestions(data.length > 0 && query.trim().length > 0);
         } catch (error) {
           console.error('Error loading suggestions:', error);
           setSuggestions([]);
@@ -41,7 +42,8 @@ export function SearchBar({ onSearch, inputRef }: SearchBarProps) {
       }
     };
 
-    const debounce = setTimeout(loadSuggestions, 300);
+    // Reduzir debounce para resposta mais rápida (200ms em vez de 300ms)
+    const debounce = setTimeout(loadSuggestions, 200);
     return () => clearTimeout(debounce);
   }, [query]);
 
@@ -112,8 +114,10 @@ export function SearchBar({ onSearch, inputRef }: SearchBarProps) {
           placeholder="Buscar produtos..."
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value);
-            onSearch(e.target.value);
+            const newQuery = e.target.value;
+            setQuery(newQuery);
+            // Não chamar onSearch enquanto está digitando (só ao submeter)
+            // Isso evita navegação prematura enquanto o usuário digita
           }}
           onKeyDown={handleKeyDown}
           onFocus={() => {
@@ -143,13 +147,17 @@ export function SearchBar({ onSearch, inputRef }: SearchBarProps) {
                 key={suggestion.id}
                 type="button"
                 onClick={() => handleSuggestionClick(suggestion)}
-                className={`w-full px-4 py-3 text-left hover:bg-gray-100 ${
-                  index === selectedIndex ? 'bg-gray-100' : ''
+                onMouseEnter={() => setSelectedIndex(index)}
+                className={`w-full px-4 py-3 text-left hover:bg-emerald-50 transition-colors ${
+                  index === selectedIndex ? 'bg-emerald-50' : ''
                 }`}
               >
-                <div className="font-medium text-gray-900">{suggestion.name}</div>
+                <div className="font-medium text-gray-900 flex items-center gap-2">
+                  <Search className="h-4 w-4 text-gray-400" />
+                  {suggestion.name}
+                </div>
                 {suggestion.category && (
-                  <div className="text-sm text-gray-500">{suggestion.category}</div>
+                  <div className="text-sm text-gray-500 mt-1 ml-6">{suggestion.category}</div>
                 )}
               </button>
             ))}
