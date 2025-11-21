@@ -761,17 +761,54 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
       // Se categoryIdsArray estiver vazio, apenas deletamos (produto sem categorias)
     }
 
-    const product = await prisma.product.update({
-      where: { id: productId },
-      data: updateData,
-      include: {
-        categories: {
-          include: {
-            category: true,
+    // Tentar atualizar com keywords primeiro
+    let product;
+    try {
+      product = await prisma.product.update({
+        where: { id: productId },
+        data: updateData,
+        include: {
+          categories: {
+            include: {
+              category: true,
+            },
           },
         },
-      },
-    });
+      });
+      console.log(`[PUT /products/${productId}] Produto atualizado com keywords`);
+    } catch (updateError: any) {
+      // Se o erro for relacionado ao campo keywords não existir, tentar sem keywords
+      const isKeywordsError = 
+        updateError.code === 'P2009' || 
+        updateError.message?.includes('Unknown field') || 
+        updateError.message?.includes('keywords') ||
+        updateError.message?.includes('Unknown argument');
+      
+      if (isKeywordsError && updateData.keywords !== undefined) {
+        console.warn(`[PUT /products/${productId}] Campo keywords não existe, tentando atualizar sem keywords...`);
+        const updateDataWithoutKeywords: any = { ...updateData };
+        delete updateDataWithoutKeywords.keywords;
+        
+        product = await prisma.product.update({
+          where: { id: productId },
+          data: updateDataWithoutKeywords,
+          include: {
+            categories: {
+              include: {
+                category: true,
+              },
+            },
+          },
+        });
+        console.log(`[PUT /products/${productId}] Produto atualizado sem keywords (campo não existe no banco)`);
+        // Adicionar keywords como null manualmente
+        (product as any).keywords = null;
+      } else {
+        throw updateError;
+      }
+    }
+    
+    console.log(`[PUT /products/${productId}] Keywords no produto atualizado:`, (product as any).keywords);
 
     // Sincronizar Product.stock com ProductVariant padrão (sem tamanho/cor)
     if (stock !== undefined) {
