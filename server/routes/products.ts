@@ -190,8 +190,9 @@ router.get('/', async (req, res) => {
           colors = [];
         }
         
+        const { keywords, ...productWithoutKeywords } = product; // Remover keywords (oculto)
         return {
-          ...product,
+          ...productWithoutKeywords,
           price: Number(product.price),
           originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
           sizes,
@@ -503,8 +504,9 @@ router.get('/:id', async (req, res) => {
     const categories = product.categories?.map((pc: any) => pc.category) || [];
     const category = categories[0] || null;
 
+    const { keywords, ...productWithoutKeywords } = product; // Remover keywords (oculto)
     const formattedProduct = {
-      ...product,
+      ...productWithoutKeywords,
       price: Number(product.price),
       originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
       sizes: JSON.parse(product.sizes),
