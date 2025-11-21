@@ -549,7 +549,14 @@ export const uploadAPI = {
       throw new Error(error.error || 'Erro ao fazer upload do arquivo');
     }
 
-    return response.json();
+    const result = await response.json();
+    
+    // Se a URL retornada for relativa, construir URL completa
+    if (result.url && result.url.startsWith('/')) {
+      result.url = `${baseURL}${result.url}`;
+    }
+    
+    return result;
   },
   deleteMedia: async (filename: string): Promise<void> => {
     await api.delete(`/admin/upload/media/${filename}`, {
