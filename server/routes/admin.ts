@@ -610,11 +610,22 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
     });
 
     // Suportar tanto categoryIds (array) quanto categoryId (single) para compatibilidade
-    const categoryIdsArray = categoryIds && Array.isArray(categoryIds)
-      ? categoryIds.map((id: any) => parseInt(id))
-      : categoryId !== undefined
-        ? [parseInt(categoryId)]
-        : undefined;
+    let categoryIdsArray: number[] | undefined = undefined;
+    
+    if (categoryIds !== undefined) {
+      // Se categoryIds foi explicitamente fornecido (mesmo que seja array vazio)
+      if (Array.isArray(categoryIds)) {
+        categoryIdsArray = categoryIds
+          .map((id: any) => parseInt(id))
+          .filter((id: number) => !isNaN(id));
+      }
+    } else if (categoryId !== undefined) {
+      // Se categoryId foi fornecido (single)
+      const parsed = parseInt(categoryId);
+      if (!isNaN(parsed)) {
+        categoryIdsArray = [parsed];
+      }
+    }
 
     // Preparar dados de atualização
     const updateData: any = {
@@ -633,21 +644,24 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
     };
 
     // Se categoryIds foi fornecido, atualizar as categorias
-    if (categoryIdsArray !== undefined) {
-      if (categoryIdsArray.length === 0) {
-        return res.status(400).json({ error: 'Selecione pelo menos uma categoria' });
-      }
-      
-      // Deletar todas as categorias existentes e criar as novas
+    // Se categoryIdsArray for undefined, não atualizar categorias (manter as existentes)
+    // Se categoryIdsArray for um array vazio, remover todas as categorias
+    // Se categoryIdsArray tiver elementos, substituir todas as categorias
+    if (categoryIds !== undefined) {
+      // Deletar todas as categorias existentes
       await prisma.productCategory.deleteMany({
         where: { productId },
       });
       
-      updateData.categories = {
-        create: categoryIdsArray.map((catId: number) => ({
-          categoryId: catId,
-        })),
-      };
+      // Se houver categorias para adicionar, criar as novas
+      if (categoryIdsArray && categoryIdsArray.length > 0) {
+        updateData.categories = {
+          create: categoryIdsArray.map((catId: number) => ({
+            categoryId: catId,
+          })),
+        };
+      }
+      // Se categoryIdsArray estiver vazio, apenas deletamos (produto sem categorias)
     }
 
     const product = await prisma.product.update({
