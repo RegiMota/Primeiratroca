@@ -522,6 +522,7 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
       
       if (isKeywordsError) {
         console.warn('[POST /products] Campo keywords não existe, tentando criar sem keywords...');
+        console.warn('[POST /products] Keywords que seriam salvos:', processedKeywords);
         try {
           product = await prisma.product.create({
             data: baseProductData, // Sem keywords
@@ -534,6 +535,8 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
             },
           });
           console.log('[POST /products] Produto criado sem keywords (campo não existe no banco)');
+          // Adicionar keywords como null manualmente para garantir que seja retornado
+          (product as any).keywords = null;
         } catch (secondError: any) {
           console.error('[POST /products] Erro ao criar produto sem keywords:', secondError);
           throw secondError; // Lançar o segundo erro (mais específico)
@@ -543,6 +546,9 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
         throw firstError;
       }
     }
+    
+    // Log para debug: verificar se keywords foi salvo
+    console.log('[POST /products] Produto criado - ID:', product.id, 'Keywords salvo:', product.keywords || 'null');
 
     // Se o produto tem estoque, criar uma variação padrão automaticamente
     const stockAmount = parseInt(stock) || 0;
