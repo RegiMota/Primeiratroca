@@ -62,7 +62,7 @@ export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   // Aumentar limite em produção para evitar bloqueios durante uso normal
   // Em desenvolvimento, limite muito alto para testes
-  max: process.env.NODE_ENV === 'production' ? 20 : 100, // Produção: 20 (aumentado de 5), Desenvolvimento: 100
+  max: process.env.NODE_ENV === 'production' ? 50 : 200, // Produção: 50 (aumentado de 20), Desenvolvimento: 200
   message: {
     error: 'Muitas tentativas de autenticação. Tente novamente em 15 minutos.',
   },

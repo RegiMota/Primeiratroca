@@ -90,6 +90,7 @@ export function LoginPage() {
               value={formData.email}
               onChange={handleInputChange}
               required
+              autoComplete="email"
               className={`mt-2 ${errors.email ? 'border-red-500' : ''}`}
               placeholder="admin@primeiratroca.com.br"
             />
@@ -107,6 +108,7 @@ export function LoginPage() {
               value={formData.password}
               onChange={handleInputChange}
               required
+              autoComplete="current-password"
               className={`mt-2 ${errors.password ? 'border-red-500' : ''}`}
               placeholder="••••••••"
             />
