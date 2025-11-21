@@ -200,6 +200,8 @@ router.get('/', async (req, res) => {
             : product.image,
           // Manter category para compatibilidade
           category,
+          // Incluir categories na resposta
+          categories,
         };
       } catch (error) {
         console.error(`Erro ao formatar produto ${product.id}:`, error);
