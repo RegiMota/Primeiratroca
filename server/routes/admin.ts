@@ -768,12 +768,62 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
     res.json(formattedProduct);
   } catch (error: any) {
     console.error('Update product error:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message,
+      meta: error.meta,
+    });
+    
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
+    
+    // Erro específico para campo desconhecido (keywords pode não existir no banco ainda)
+    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
+      // Tentar atualizar sem o campo keywords (caso o campo ainda não exista no banco)
+      try {
+        const updateDataWithoutKeywords: any = { ...updateData };
+        delete updateDataWithoutKeywords.keywords;
+        
+        const product = await prisma.product.update({
+          where: { id: productId },
+          data: updateDataWithoutKeywords,
+          include: {
+            categories: {
+              include: {
+                category: true,
+              },
+            },
+          },
+        });
+        
+        console.warn('Produto atualizado sem keywords (campo pode não existir no banco ainda)');
+        
+        const formattedProduct = {
+          ...product,
+          price: Number(product.price),
+          originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+          sizes: JSON.parse(product.sizes),
+          colors: JSON.parse(product.colors),
+          gender: product.gender || null,
+          category: product.categories?.[0]?.category || null,
+        };
+        
+        return res.json(formattedProduct);
+      } catch (retryError: any) {
+        console.error('Error on retry without keywords:', retryError);
+      }
+    }
+    
     res.status(500).json({ 
       error: 'Erro ao atualizar produto',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        code: error.code,
+        hint: error.code === 'P2009' || error.message?.includes('keywords')
+          ? 'O campo keywords pode não existir no banco de dados. Execute: npx prisma db push'
+          : undefined
+      } : undefined
     });
   }
 });
