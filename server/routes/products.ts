@@ -241,6 +241,108 @@ router.get('/', async (req, res) => {
     console.error('Error code:', error.code);
     console.error('Error meta:', error.meta);
     
+    // Erro específico para campo desconhecido (keywords pode não existir no banco ainda)
+    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
+      // Tentar buscar sem o campo keywords (caso o campo ainda não exista no banco)
+      try {
+        console.warn('Tentando buscar produtos sem keywords (campo pode não existir no banco ainda)');
+        
+        // Recriar where sem keywords
+        const whereWithoutKeywords: any = { ...where };
+        if (whereWithoutKeywords.AND) {
+          whereWithoutKeywords.AND = whereWithoutKeywords.AND.map((condition: any) => {
+            if (condition.OR) {
+              return {
+                OR: condition.OR.filter((orCondition: any) => !orCondition.keywords),
+              };
+            }
+            return condition;
+          });
+        }
+        
+        const total = await prisma.product.count({ where: whereWithoutKeywords });
+        const products = await prisma.product.findMany({
+          where: whereWithoutKeywords,
+          include: {
+            categories: {
+              include: {
+                category: true,
+              },
+            },
+            images: {
+              orderBy: [
+                { isPrimary: 'desc' },
+                { order: 'asc' },
+                { createdAt: 'asc' },
+              ],
+            },
+          },
+          orderBy,
+          take: limitNum,
+          skip: offsetNum,
+        });
+        
+        // Formatar produtos (mesmo código de formatação)
+        const formattedProducts = products.map((product) => {
+          try {
+            const categories = product.categories?.map((pc: any) => pc.category) || [];
+            const category = categories[0] || null;
+            
+            let sizes = [];
+            let colors = [];
+            try {
+              sizes = typeof product.sizes === 'string' ? JSON.parse(product.sizes) : (product.sizes || []);
+            } catch (e) {
+              sizes = [];
+            }
+            try {
+              colors = typeof product.colors === 'string' ? JSON.parse(product.colors) : (product.colors || []);
+            } catch (e) {
+              colors = [];
+            }
+            
+            const { keywords, ...productWithoutKeywords } = product;
+            return {
+              ...productWithoutKeywords,
+              price: Number(product.price),
+              originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+              sizes,
+              colors,
+              image: product.images && product.images.length > 0 
+                ? product.images[0].url 
+                : product.image,
+              category,
+              categories,
+            };
+          } catch (error) {
+            return {
+              ...product,
+              price: Number(product.price) || 0,
+              originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+              sizes: [],
+              colors: [],
+              image: product.image || '',
+              category: null,
+            };
+          }
+        });
+        
+        if (limitNum !== undefined) {
+          return res.json({
+            products: formattedProducts,
+            total,
+            limit: limitNum,
+            offset: offsetNum,
+            hasMore: offsetNum + limitNum < total,
+          });
+        } else {
+          return res.json(formattedProducts);
+        }
+      } catch (retryError: any) {
+        console.error('Error on retry without keywords:', retryError);
+      }
+    }
+    
     // Retornar mais detalhes em desenvolvimento para facilitar debug
     const errorResponse: any = {
       error: 'Erro ao buscar produtos',
@@ -469,8 +571,56 @@ router.get('/search/suggestions', async (req, res) => {
     });
 
     res.json(suggestions);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get search suggestions error:', error);
+    
+    // Erro específico para campo desconhecido (keywords pode não existir no banco ainda)
+    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
+      // Tentar buscar sem o campo keywords
+      try {
+        console.warn('Tentando buscar sugestões sem keywords (campo pode não existir no banco ainda)');
+        
+        const products = await prisma.product.findMany({
+          where: {
+            OR: [
+              { name: { contains: searchTerm, mode: 'insensitive' } },
+              { description: { contains: searchTerm, mode: 'insensitive' } },
+            ],
+          },
+          select: {
+            id: true,
+            name: true,
+            categories: {
+              include: {
+                category: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+          take: 10,
+          orderBy: {
+            name: 'asc',
+          },
+        });
+        
+        const suggestions = products.map((product) => {
+          const categoryName = product.categories?.[0]?.category?.name || '';
+          return {
+            id: product.id,
+            name: product.name,
+            category: categoryName,
+          };
+        });
+        
+        return res.json(suggestions);
+      } catch (retryError: any) {
+        console.error('Error on retry without keywords:', retryError);
+      }
+    }
+    
     res.status(500).json({ error: 'Erro ao buscar sugestões' });
   }
 });
