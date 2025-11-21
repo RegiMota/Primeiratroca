@@ -34,13 +34,15 @@ export const verifyRecaptcha = async (
     const token = req.body.recaptchaToken || req.headers['x-recaptcha-token'];
 
     if (!token) {
-      // Em produção, bloquear se não houver token
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(400).json({
-          error: 'Token reCAPTCHA não fornecido',
-        });
-      }
-      // Em desenvolvimento, permitir
+      // Se não houver token, logar aviso mas permitir (reCAPTCHA pode estar desabilitado no frontend)
+      console.warn('[reCAPTCHA] Token não fornecido, mas permitindo requisição (reCAPTCHA pode estar desabilitado)');
+      // Em produção, apenas logar mas não bloquear (para evitar problemas com frontend sem reCAPTCHA)
+      // Se quiser bloquear, descomente as linhas abaixo
+      // if (process.env.NODE_ENV === 'production') {
+      //   return res.status(400).json({
+      //     error: 'Token reCAPTCHA não fornecido',
+      //   });
+      // }
       return next();
     }
 
