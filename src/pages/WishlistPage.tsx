@@ -361,7 +361,12 @@ export function WishlistPage() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-extrabold text-purple-600 dark:text-purple-400">
-                {new Set(items.map((item) => item.product.category.name)).size}
+                {new Set(items.map((item) => {
+                  const category = item.product.category;
+                  return typeof category === 'object' && category?.name 
+                    ? category.name 
+                    : category || 'Sem categoria';
+                })).size}
               </div>
             </CardContent>
           </Card>
@@ -475,7 +480,9 @@ export function WishlistPage() {
                     </CardTitle>
                   </Link>
                   <CardDescription className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {product.category.name}
+                    {typeof product.category === 'object' && product.category?.name 
+                      ? product.category.name 
+                      : product.category || 'Sem categoria'}
                   </CardDescription>
                   {variant && (
                     <div className="mt-2 flex flex-wrap gap-1.5">

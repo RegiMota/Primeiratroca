@@ -286,7 +286,11 @@ export function CompareProductsPage() {
                 </td>
                 {products.map((product) => (
                   <td key={product.id} className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                    <Badge variant="outline">{product.category.name}</Badge>
+                    <Badge variant="outline">
+                      {typeof product.category === 'object' && product.category?.name 
+                        ? product.category.name 
+                        : product.category || 'Sem categoria'}
+                    </Badge>
                   </td>
                 ))}
               </tr>
