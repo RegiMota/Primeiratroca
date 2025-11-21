@@ -182,8 +182,16 @@ export function AdminProductsPage() {
         setEditingProduct({ ...productData, id: productId, categories: selectedCategories } as Product);
       }
       loadData();
-    } catch (error) {
-      toast.error('Erro ao salvar produto');
+    } catch (error: any) {
+      console.error('Error saving product:', error);
+      const errorMessage = error.response?.data?.error || error.response?.data?.details || error.message || 'Erro ao salvar produto';
+      const missingFields = error.response?.data?.missingFields;
+      
+      if (missingFields && Array.isArray(missingFields)) {
+        toast.error(`Erro ao salvar produto: Faltam os seguintes campos: ${missingFields.join(', ')}`);
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setSubmitting(false);
     }
