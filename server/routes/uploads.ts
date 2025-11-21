@@ -69,7 +69,8 @@ router.post('/media', authenticate, requireAdmin, upload.single('file'), async (
       return res.status(400).json({ error: 'Nenhum arquivo foi enviado' });
     }
 
-    // Retornar URL relativa do arquivo
+    // Retornar URL relativa do arquivo (será resolvida pelo frontend)
+    // Em produção, o Nginx servirá os arquivos estáticos
     const fileUrl = `/uploads/media/${req.file.filename}`;
     
     res.json({
