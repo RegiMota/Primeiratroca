@@ -166,7 +166,7 @@ export function ShopPage() {
     featuredOnly ? 1 : 0,
   ].reduce((sum, count) => sum + count, 0);
   
-  // Limpar todos os filtros
+  // Limpar todos os filtros (incluindo busca)
   const clearFilters = () => {
     setSelectedCategory('All');
     setPriceRange([0, 500]);
@@ -174,7 +174,40 @@ export function ShopPage() {
     setSelectedColors([]);
     setInStockOnly(false);
     setFeaturedOnly(false);
+    setSearchQuery(''); // Limpar busca também
     setCurrentPage(1);
+    // Atualizar URL para remover parâmetros de busca
+    const url = new URL(window.location.href);
+    url.searchParams.delete('search');
+    window.history.replaceState({}, '', url.toString());
+  };
+
+  // Handler para mudança de categoria (limpa busca quando categoria é selecionada)
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    // Limpar busca quando uma categoria é selecionada (mesmo se for 'All')
+    setSearchQuery('');
+    // Atualizar URL para remover parâmetro de busca e atualizar categoria
+    const url = new URL(window.location.href);
+    url.searchParams.delete('search');
+    if (category !== 'All') {
+      url.searchParams.set('category', category);
+    } else {
+      url.searchParams.delete('category');
+    }
+    window.history.replaceState({}, '', url.toString());
+  };
+
+  // Handler para mudança de outros filtros (limpa busca quando filtros são aplicados)
+  const handleFilterChange = () => {
+    // Limpar busca quando filtros são aplicados
+    if (searchQuery) {
+      setSearchQuery('');
+      // Atualizar URL para remover parâmetro de busca
+      const url = new URL(window.location.href);
+      url.searchParams.delete('search');
+      window.history.replaceState({}, '', url.toString());
+    }
   };
 
   useEffect(() => {
@@ -369,19 +402,32 @@ export function ShopPage() {
                 <FilterSidebar
                   categories={categories}
                   selectedCategory={selectedCategory}
-                  onCategoryChange={(cat) => {
-                    setSelectedCategory(cat);
-                  }}
+                  onCategoryChange={handleCategoryChange}
                   priceRange={priceRange}
-                  onPriceRangeChange={setPriceRange}
+                  onPriceRangeChange={(range) => {
+                    setPriceRange(range);
+                    handleFilterChange();
+                  }}
                   selectedSizes={selectedSizes}
-                  onSizesChange={setSelectedSizes}
+                  onSizesChange={(sizes) => {
+                    setSelectedSizes(sizes);
+                    handleFilterChange();
+                  }}
                   selectedColors={selectedColors}
-                  onColorsChange={setSelectedColors}
+                  onColorsChange={(colors) => {
+                    setSelectedColors(colors);
+                    handleFilterChange();
+                  }}
                   inStockOnly={inStockOnly}
-                  onInStockChange={setInStockOnly}
+                  onInStockChange={(inStock) => {
+                    setInStockOnly(inStock);
+                    handleFilterChange();
+                  }}
                   featuredOnly={featuredOnly}
-                  onFeaturedChange={setFeaturedOnly}
+                  onFeaturedChange={(featured) => {
+                    setFeaturedOnly(featured);
+                    handleFilterChange();
+                  }}
                   availableSizes={availableSizes}
                   availableColors={availableColors}
                   onClearFilters={() => {
@@ -401,17 +447,32 @@ export function ShopPage() {
           <FilterSidebar
             categories={categories}
             selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
+            onCategoryChange={handleCategoryChange}
             priceRange={priceRange}
-            onPriceRangeChange={setPriceRange}
+            onPriceRangeChange={(range) => {
+              setPriceRange(range);
+              handleFilterChange();
+            }}
             selectedSizes={selectedSizes}
-            onSizesChange={setSelectedSizes}
+            onSizesChange={(sizes) => {
+              setSelectedSizes(sizes);
+              handleFilterChange();
+            }}
             selectedColors={selectedColors}
-            onColorsChange={setSelectedColors}
+            onColorsChange={(colors) => {
+              setSelectedColors(colors);
+              handleFilterChange();
+            }}
             inStockOnly={inStockOnly}
-            onInStockChange={setInStockOnly}
+            onInStockChange={(inStock) => {
+              setInStockOnly(inStock);
+              handleFilterChange();
+            }}
             featuredOnly={featuredOnly}
-            onFeaturedChange={setFeaturedOnly}
+            onFeaturedChange={(featured) => {
+              setFeaturedOnly(featured);
+              handleFilterChange();
+            }}
             availableSizes={availableSizes}
             availableColors={availableColors}
             onClearFilters={clearFilters}
