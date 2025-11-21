@@ -522,6 +522,42 @@ export const productImagesAPI = {
   },
 };
 
+// UPLOAD API
+export const uploadAPI = {
+  uploadMedia: async (file: File): Promise<{ url: string; filename: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Detectar protocolo e base URL
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const host = window.location.hostname;
+    const port = window.location.port ? `:${window.location.port}` : '';
+    const baseURL = process.env.NODE_ENV === 'production' 
+      ? `${protocol}//${host}${port}`
+      : `${protocol}//${host}:5000`;
+
+    const response = await fetch(`${baseURL}/api/admin/upload/media`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Erro ao fazer upload do arquivo');
+    }
+
+    return response.json();
+  },
+  deleteMedia: async (filename: string): Promise<void> => {
+    await api.delete(`/admin/upload/media/${filename}`, {
+      timeout: 30000,
+    });
+  },
+};
+
 // HERO SLIDES API
 export const heroSlidesAPI = {
   getAll: async () => {

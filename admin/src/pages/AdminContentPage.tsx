@@ -1,7 +1,7 @@
 // Página para gerenciar conteúdo da página principal (Carrossel e Cards de Benefícios)
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { heroSlidesAPI, benefitCardsAPI } from '../lib/api';
+import { heroSlidesAPI, benefitCardsAPI, uploadAPI } from '../lib/api';
 import { 
   Image, Video, FileImage, Trash2, Edit, Plus, ArrowUp, ArrowDown,
   Send, RefreshCw, CreditCard, Package, Truck, Shield, Heart, Star
@@ -93,6 +93,10 @@ export function AdminContentPage() {
     order: 0,
     isActive: true,
   });
+  const [mediaInputMode, setMediaInputMode] = useState<'url' | 'upload'>('url');
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [cardFormData, setCardFormData] = useState({
     iconName: 'Send',
     imageUrl: '',
@@ -140,6 +144,9 @@ export function AdminContentPage() {
       order: heroSlides.length,
       isActive: true,
     });
+    setMediaInputMode('url');
+    setMediaFile(null);
+    setMediaPreview(null);
     setIsSlideDialogOpen(true);
   };
 
@@ -158,7 +165,39 @@ export function AdminContentPage() {
       order: slide.order,
       isActive: slide.isActive,
     });
+    // Detectar se é URL local (upload) ou externa
+    const isLocalUpload = slide.mediaUrl?.startsWith('/uploads/');
+    setMediaInputMode(isLocalUpload ? 'upload' : 'url');
+    setMediaFile(null);
+    setMediaPreview(slide.mediaUrl || null);
     setIsSlideDialogOpen(true);
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo de arquivo
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-msvideo'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Tipo de arquivo não permitido. Apenas imagens, vídeos e GIFs são aceitos.');
+      return;
+    }
+
+    // Validar tamanho (100MB máximo)
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Tamanho máximo: 100MB');
+      return;
+    }
+
+    setMediaFile(file);
+    
+    // Criar preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setMediaPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveSlide = async () => {
@@ -171,16 +210,48 @@ export function AdminContentPage() {
       // Mostrar loading
       const loadingToast = toast.loading('Salvando slide...');
 
+      let finalMediaUrl = slideFormData.mediaUrl;
+      let finalMediaType = slideFormData.mediaType;
+
+      // Se foi selecionado um arquivo para upload
+      if (mediaInputMode === 'upload' && mediaFile) {
+        setUploadingMedia(true);
+        try {
+          const uploadResult = await uploadAPI.uploadMedia(mediaFile);
+          finalMediaUrl = uploadResult.url;
+          finalMediaType = detectMediaType(uploadResult.url);
+          toast.dismiss(loadingToast);
+          toast.loading('Salvando slide...', { id: loadingToast });
+        } catch (uploadError: any) {
+          toast.dismiss(loadingToast);
+          toast.error(uploadError.message || 'Erro ao fazer upload do arquivo');
+          setUploadingMedia(false);
+          return;
+        }
+        setUploadingMedia(false);
+      } else if (mediaInputMode === 'url' && slideFormData.mediaUrl) {
+        // Se é URL, detectar tipo
+        finalMediaType = detectMediaType(slideFormData.mediaUrl);
+      }
+
+      const slideData = {
+        ...slideFormData,
+        mediaUrl: finalMediaUrl || undefined,
+        mediaType: finalMediaType,
+      };
+
       if (editingSlide) {
-        await heroSlidesAPI.update(editingSlide.id, slideFormData);
+        await heroSlidesAPI.update(editingSlide.id, slideData);
         toast.dismiss(loadingToast);
         toast.success('Slide atualizado com sucesso');
       } else {
-        await heroSlidesAPI.create(slideFormData);
+        await heroSlidesAPI.create(slideData);
         toast.dismiss(loadingToast);
         toast.success('Slide criado com sucesso');
       }
       setIsSlideDialogOpen(false);
+      setMediaFile(null);
+      setMediaPreview(null);
       await loadData();
     } catch (error) {
       console.error('Error saving slide:', error);
@@ -196,6 +267,7 @@ export function AdminContentPage() {
       } else {
         toast.error(axiosError.response?.data?.error || 'Erro ao salvar slide');
       }
+      setUploadingMedia(false);
     }
   };
 
@@ -587,16 +659,104 @@ export function AdminContentPage() {
             </div>
 
             <div>
-              <Label htmlFor="mediaUrl">URL da Mídia (Imagem, Vídeo ou GIF)</Label>
-              <Input
-                id="mediaUrl"
-                value={slideFormData.mediaUrl}
-                onChange={(e) => handleMediaUrlChange(e.target.value)}
-                placeholder="https://exemplo.com/imagem.jpg"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Suporta imagens (.jpg, .png, .gif), vídeos (.mp4, .webm) e GIFs
-              </p>
+              <Label>Mídia (Imagem, Vídeo ou GIF)</Label>
+              
+              {/* Tabs para escolher entre URL ou Upload */}
+              <Tabs value={mediaInputMode} onValueChange={(value) => {
+                setMediaInputMode(value as 'url' | 'upload');
+                if (value === 'upload') {
+                  setSlideFormData({ ...slideFormData, mediaUrl: '' });
+                } else {
+                  setMediaFile(null);
+                  setMediaPreview(null);
+                }
+              }} className="mt-2">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="url">URL</TabsTrigger>
+                  <TabsTrigger value="upload">Upload</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="url" className="space-y-2">
+                  <Input
+                    id="mediaUrl"
+                    value={slideFormData.mediaUrl}
+                    onChange={(e) => handleMediaUrlChange(e.target.value)}
+                    placeholder="https://exemplo.com/imagem.jpg"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Cole o link da imagem, vídeo ou GIF
+                  </p>
+                  {slideFormData.mediaUrl && (
+                    <div className="mt-2 relative">
+                      {slideFormData.mediaType === 'video' ? (
+                        <video
+                          src={slideFormData.mediaUrl}
+                          className="w-full h-32 object-contain rounded border border-gray-300 bg-gray-50"
+                          controls
+                          muted
+                        />
+                      ) : (
+                        <img
+                          src={slideFormData.mediaUrl}
+                          alt="Preview"
+                          className="w-full h-32 object-contain rounded border border-gray-300 bg-gray-50"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="upload" className="space-y-2">
+                  <Input
+                    id="mediaFile"
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={handleFileSelect}
+                    disabled={uploadingMedia}
+                    className="cursor-pointer"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Faça upload de uma imagem, vídeo ou GIF do seu dispositivo (máx. 100MB)
+                  </p>
+                  {mediaPreview && (
+                    <div className="mt-2 relative">
+                      {mediaFile?.type.startsWith('video/') ? (
+                        <video
+                          src={mediaPreview}
+                          className="w-full h-32 object-contain rounded border border-gray-300 bg-gray-50"
+                          controls
+                          muted
+                        />
+                      ) : (
+                        <img
+                          src={mediaPreview}
+                          alt="Preview"
+                          className="w-full h-32 object-contain rounded border border-gray-300 bg-gray-50"
+                        />
+                      )}
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          setMediaFile(null);
+                          setMediaPreview(null);
+                        }}
+                        disabled={uploadingMedia}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  {uploadingMedia && (
+                    <p className="text-xs text-blue-600">Fazendo upload do arquivo...</p>
+                  )}
+                </TabsContent>
+              </Tabs>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

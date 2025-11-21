@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import os from 'os';
+import path from 'path';
 import authRoutes from './routes/auth';
 import productRoutes from './routes/products';
 import categoryRoutes from './routes/categories';
@@ -23,6 +24,7 @@ import ticketsRoutes from './routes/tickets';
 import chatRoutes from './routes/chat';
 import faqRoutes from './routes/faq';
 import announcementsRoutes from './routes/announcements';
+import uploadsRoutes from './routes/uploads';
 import { initSocketServer } from './socket';
 import { initStockJobs } from './jobs/stockJobs';
 import { initWishlistJobs } from './jobs/wishlistJobs';
@@ -97,6 +99,9 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' })); // Aumentar limite para upload de arquivos base64 (imagens, PDFs, áudio)
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Servir arquivos estáticos da pasta uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 // Trust proxy para obter IP real do cliente (importante para rate limiting e auditoria)
 app.set('trust proxy', 1);
 
@@ -124,6 +129,7 @@ app.use('/api/tickets', ticketsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/faq', faqRoutes);
 app.use('/api/announcements', announcementsRoutes);
+app.use('/api/admin/upload', uploadsRoutes);
 
 // Error handling middleware (must be after routes)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
