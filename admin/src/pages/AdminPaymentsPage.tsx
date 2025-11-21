@@ -73,6 +73,9 @@ export function AdminPaymentsPage() {
   const [refunding, setRefunding] = useState<number | null>(null);
   const [syncing, setSyncing] = useState<number | null>(null);
   const [refundConfirmation, setRefundConfirmation] = useState<string>('');
+  const [isRefundDialogOpen, setIsRefundDialogOpen] = useState(false);
+  const [refundOrderIdInput, setRefundOrderIdInput] = useState<string>('');
+  const [refundError, setRefundError] = useState<string>('');
 
   useEffect(() => {
     loadPayments();
@@ -118,17 +121,28 @@ export function AdminPaymentsPage() {
     }
   };
 
-  const handleRefund = async (paymentId: number, orderId: number) => {
-    // Validar confirmação com número do pedido
-    const confirmationValue = refundConfirmation.trim();
+  const handleRefundClick = (paymentId: number, orderId: number) => {
+    // Abrir dialog de confirmação de reembolso
+    // Manter os dados do pagamento selecionado, mas atualizar id e orderId
+    const currentPayment = payments.find(p => p.id === paymentId) || selectedPayment;
+    setSelectedPayment({ ...currentPayment, id: paymentId, orderId });
+    setRefundOrderIdInput('');
+    setRefundError('');
+    setIsRefundDialogOpen(true);
+  };
+
+  const handleRefundConfirm = async () => {
+    if (!selectedPayment) return;
+
+    const paymentId = selectedPayment.id;
+    const orderId = selectedPayment.orderId;
+    const inputValue = refundOrderIdInput.trim();
+
+    // Validar se o número digitado corresponde ao número do pedido
     const expectedOrderId = orderId.toString();
-
-    if (confirmationValue !== expectedOrderId) {
-      toast.error(`Por favor, digite o número do pedido (${expectedOrderId}) para confirmar o reembolso`);
-      return;
-    }
-
-    if (!confirm('Tem certeza que deseja reembolsar este pagamento? Esta ação não pode ser desfeita.')) {
+    
+    if (inputValue !== expectedOrderId) {
+      setRefundError(`Número do pedido incorreto. Digite ${expectedOrderId} para confirmar.`);
       return;
     }
 
@@ -136,6 +150,8 @@ export function AdminPaymentsPage() {
 
     try {
       setRefunding(paymentId);
+      setRefundError('');
+      
       await adminAPI.refundPayment(paymentId);
       
       // Atualizar pagamento na lista
@@ -150,18 +166,18 @@ export function AdminPaymentsPage() {
         setSelectedPayment({ ...selectedPayment, status: 'refunded' });
       }
 
-      // Limpar campo de confirmação
-      setRefundConfirmation('');
+      // Limpar campos e fechar dialogs
+      setRefundOrderIdInput('');
+      setIsRefundDialogOpen(false);
+      setIsDetailDialogOpen(false);
 
       // Atualizar stats
       loadStats();
 
       toast.success('Reembolso processado com sucesso');
-      
-      // Fechar modal após sucesso
-      setIsDetailDialogOpen(false);
     } catch (error: any) {
       console.error('Error refunding payment:', error);
+      setRefundError(error.response?.data?.error || 'Erro ao processar reembolso');
       toast.error(error.response?.data?.error || 'Erro ao processar reembolso');
     } finally {
       setRefunding(null);
@@ -489,28 +505,11 @@ export function AdminPaymentsPage() {
               )}
 
               {selectedPayment.status === 'approved' && (
-                <div className="space-y-4 border-t pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="refund-confirmation" className="text-sm font-medium text-gray-700">
-                      Confirmação de Reembolso
-                    </Label>
-                    <p className="text-xs text-gray-500">
-                      Para confirmar o reembolso, digite o número do pedido: <strong>#{selectedPayment.orderId}</strong>
-                    </p>
-                    <Input
-                      id="refund-confirmation"
-                      type="text"
-                      placeholder={`Digite ${selectedPayment.orderId} para confirmar`}
-                      value={refundConfirmation}
-                      onChange={(e) => setRefundConfirmation(e.target.value)}
-                      disabled={refunding === selectedPayment.id}
-                      className="max-w-xs"
-                    />
-                  </div>
+                <div className="border-t pt-4">
                   <Button
                     variant="destructive"
-                    onClick={() => handleRefund(selectedPayment.id, selectedPayment.orderId)}
-                    disabled={refunding === selectedPayment.id || refundConfirmation.trim() !== selectedPayment.orderId.toString()}
+                    onClick={() => handleRefundClick(selectedPayment.id, selectedPayment.orderId)}
+                    disabled={refunding === selectedPayment.id}
                     className="w-full sm:w-auto"
                   >
                     <RefreshCw
@@ -520,6 +519,78 @@ export function AdminPaymentsPage() {
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Refund Confirmation Dialog */}
+      <Dialog open={isRefundDialogOpen} onOpenChange={setIsRefundDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Reembolso</DialogTitle>
+            <DialogDescription>
+              Para confirmar o reembolso, digite o número do pedido abaixo.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPayment && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="refund-order-id" className="text-sm font-medium text-gray-700">
+                  Número do Pedido
+                </Label>
+                <p className="text-xs text-gray-500">
+                  Digite <strong>#{selectedPayment.orderId}</strong> para confirmar o reembolso do pagamento #{selectedPayment.id}
+                </p>
+                <Input
+                  id="refund-order-id"
+                  type="text"
+                  placeholder={`Digite ${selectedPayment.orderId}`}
+                  value={refundOrderIdInput}
+                  onChange={(e) => {
+                    setRefundOrderIdInput(e.target.value);
+                    setRefundError(''); // Limpar erro ao digitar
+                  }}
+                  disabled={refunding === selectedPayment.id}
+                  className={refundError ? 'border-red-500' : ''}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && refundOrderIdInput.trim() === selectedPayment.orderId.toString()) {
+                      handleRefundConfirm();
+                    }
+                  }}
+                  autoFocus
+                />
+                {refundError && (
+                  <p className="text-sm text-red-600">{refundError}</p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsRefundDialogOpen(false);
+                    setRefundOrderIdInput('');
+                    setRefundError('');
+                  }}
+                  disabled={refunding === selectedPayment.id}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleRefundConfirm}
+                  disabled={refunding === selectedPayment.id || refundOrderIdInput.trim() !== selectedPayment.orderId.toString()}
+                >
+                  {refunding === selectedPayment.id ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    'Confirmar Reembolso'
+                  )}
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
