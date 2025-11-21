@@ -541,17 +541,22 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
       }
     }
 
-    // Registrar ação na auditoria
-    await AuditService.log({
-      userId: req.adminUserId,
-      userEmail: req.adminUser?.email,
-      action: 'create',
-      resourceType: 'product',
-      resourceId: product.id,
-      details: { name, price: parseFloat(price) },
-      ipAddress: req.ip || req.socket.remoteAddress || undefined,
-      userAgent: req.get('user-agent') || undefined,
-    });
+    // Registrar ação na auditoria (não falhar se a auditoria falhar)
+    try {
+      await AuditService.log({
+        userId: req.adminUserId,
+        userEmail: req.adminUser?.email,
+        action: 'create',
+        resourceType: 'product',
+        resourceId: product.id,
+        details: { name, price: parseFloat(price) },
+        ipAddress: req.ip || req.socket.remoteAddress || undefined,
+        userAgent: req.get('user-agent') || undefined,
+      });
+    } catch (auditError: any) {
+      console.warn('Erro ao registrar auditoria (continuando):', auditError.message);
+      // Não falhar a criação do produto se a auditoria falhar
+    }
 
     const formattedProduct = {
       ...product,
