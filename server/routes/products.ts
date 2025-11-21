@@ -242,7 +242,15 @@ router.get('/', async (req, res) => {
     console.error('Error meta:', error.meta);
     
     // Erro específico para campo desconhecido (keywords pode não existir no banco ainda)
-    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
+    // Capturar qualquer erro relacionado a campo desconhecido ou argumento inválido
+    const isUnknownFieldError = 
+      error.code === 'P2009' || 
+      error.message?.includes('Unknown field') || 
+      error.message?.includes('keywords') ||
+      error.message?.includes('Unknown argument') ||
+      (error.message && typeof error.message === 'string' && error.message.includes('keywords'));
+    
+    if (isUnknownFieldError) {
       // Tentar buscar sem o campo keywords (caso o campo ainda não exista no banco)
       try {
         console.warn('Tentando buscar produtos sem keywords (campo pode não existir no banco ainda)');
@@ -576,7 +584,14 @@ router.get('/search/suggestions', async (req, res) => {
     console.error('Get search suggestions error:', error);
     
     // Erro específico para campo desconhecido (keywords pode não existir no banco ainda)
-    if (error.code === 'P2009' || error.message?.includes('Unknown field') || error.message?.includes('keywords')) {
+    const isUnknownFieldError = 
+      error.code === 'P2009' || 
+      error.message?.includes('Unknown field') || 
+      error.message?.includes('keywords') ||
+      error.message?.includes('Unknown argument') ||
+      (error.message && typeof error.message === 'string' && error.message.includes('keywords'));
+    
+    if (isUnknownFieldError) {
       // Tentar buscar sem o campo keywords
       try {
         console.warn('Tentando buscar sugestões sem keywords (campo pode não existir no banco ainda)');
