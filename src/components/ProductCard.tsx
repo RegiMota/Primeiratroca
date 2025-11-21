@@ -147,7 +147,9 @@ export function ProductCard({ product }: ProductCardProps) {
         {/* Categoria/Marca */}
         <div>
           <Badge variant="outline" className="border-sky-400 text-sky-600 bg-sky-50 text-[9px] sm:text-[10px] md:text-xs font-medium py-0.5 px-0.5 sm:px-1 md:px-2">
-            {typeof product.category === 'object' ? product.category.name : product.category}
+            {typeof product.category === 'object' && product.category?.name 
+              ? product.category.name 
+              : product.category || 'Sem categoria'}
           </Badge>
         </div>
 

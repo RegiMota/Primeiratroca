@@ -575,7 +575,7 @@ function NovidadesSection() {
                       <h3 className="mb-1 text-xl md:text-2xl lg:text-3xl font-bold leading-tight">
                         {product.name}
                       </h3>
-                      {typeof product.category === 'object' && product.category.name && (
+                      {typeof product.category === 'object' && product.category?.name && (
                         <p className="mb-4 text-sm md:text-base text-white/70">
                           {product.category.name}
                         </p>

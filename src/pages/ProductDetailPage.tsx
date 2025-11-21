@@ -557,7 +557,9 @@ export function ProductDetailPage() {
         <div className="space-y-4 sm:space-y-6 lg:sticky lg:top-24 lg:self-start">
           <div>
             <Badge variant="outline" className="mb-2 sm:mb-3 lg:mb-4 border-sky-400 text-sky-600 bg-sky-50 text-[10px] sm:text-xs font-medium py-1 sm:py-1.5 px-2 sm:px-3">
-              {typeof product.category === 'object' ? product.category.name : product.category}
+              {typeof product.category === 'object' && product.category?.name 
+                ? product.category.name 
+                : product.category || 'Sem categoria'}
             </Badge>
             <h1 className="mb-2 sm:mb-3 lg:mb-4 text-gray-900 text-xl sm:text-2xl lg:text-[2rem] font-bold sm:font-extrabold lg:font-black leading-tight sm:leading-snug" style={{ fontWeight: 900, lineHeight: 1.2 }}>
               {product.name}
