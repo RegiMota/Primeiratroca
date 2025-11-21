@@ -9,20 +9,20 @@ docker-compose stop backend
 
 # 2. Verificar schema do Prisma
 echo -e "\n2️⃣ Verificando schema do Prisma..."
-docker-compose exec -T backend npx prisma validate
+docker-compose run --rm backend npx prisma validate
 
 # 3. Aplicar mudanças do schema ao banco (db push)
 echo -e "\n3️⃣ Aplicando mudanças do schema ao banco (db push)..."
-docker-compose exec -T backend npx prisma db push --accept-data-loss
+docker-compose run --rm backend npx prisma db push --accept-data-loss
 
 if [ $? -ne 0 ]; then
     echo "❌ Erro ao aplicar schema. Tentando forçar..."
-    docker-compose exec -T backend npx prisma db push --force-reset --skip-generate
+    docker-compose run --rm backend npx prisma db push --force-reset --skip-generate
 fi
 
 # 4. Regenerar Prisma Client
 echo -e "\n4️⃣ Regenerando Prisma Client..."
-docker-compose exec -T backend npx prisma generate
+docker-compose run --rm backend npx prisma generate
 
 if [ $? -ne 0 ]; then
     echo "❌ Erro ao regenerar Prisma Client"
@@ -31,7 +31,7 @@ fi
 
 # 5. Verificar se o client foi gerado corretamente
 echo -e "\n5️⃣ Verificando se o relacionamento 'categories' existe no client..."
-docker-compose exec -T backend node -e "
+docker-compose run --rm backend node -e "
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
