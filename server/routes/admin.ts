@@ -599,10 +599,13 @@ router.post('/products', authenticate, requireAdmin, async (req: AdminRequest, r
 
 // Update product
 router.put('/products/:id', async (req: AdminRequest, res) => {
+  const productId = parseInt(req.params.id);
+  const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, keywords, featured, stock } = req.body;
+  
+  // Declarar updateData fora do try para estar acessível no catch
+  let updateData: any = {};
+  
   try {
-    const productId = parseInt(req.params.id);
-    const { name, description, detailedDescription, price, originalPrice, image, categoryIds, categoryId, sizes, colors, gender, keywords, featured, stock } = req.body;
-
     // Get old product to check stock level
     const oldProduct = await prisma.product.findUnique({
       where: { id: productId },
@@ -628,7 +631,7 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
     }
 
     // Preparar dados de atualização
-    const updateData: any = {
+    updateData = {
       name,
       description,
       detailedDescription: detailedDescription !== undefined ? (detailedDescription || null) : undefined,
