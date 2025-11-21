@@ -15,12 +15,8 @@ else
     echo "   ✅ Backend está rodando"
 fi
 
-# 2. Parar o backend temporariamente para evitar conflitos
-echo -e "\n2️⃣ Parando backend temporariamente..."
-docker-compose stop backend
-
-# 3. Verificar se o campo existe no banco e criar se necessário
-echo -e "\n3️⃣ Verificando e criando campo keywords no banco..."
+# 2. Verificar se o campo existe no banco e criar se necessário
+echo -e "\n2️⃣ Verificando e criando campo keywords no banco..."
 docker-compose exec -T postgres psql -U primeiratroca -d primeiratroca <<EOF
 DO \$\$
 BEGIN
@@ -45,35 +41,34 @@ else
     echo "   ⚠️  Erro ao verificar/criar campo (pode já existir)"
 fi
 
-# 4. Remover cache do Prisma Client completamente
-echo -e "\n4️⃣ Removendo cache do Prisma Client..."
+# 3. Remover cache do Prisma Client completamente
+echo -e "\n3️⃣ Removendo cache do Prisma Client..."
 docker-compose exec backend rm -rf node_modules/.prisma 2>/dev/null || true
 docker-compose exec backend rm -rf node_modules/@prisma/client 2>/dev/null || true
 docker-compose exec backend find node_modules -name "*prisma*" -type d -exec rm -rf {} + 2>/dev/null || true
 echo "   ✅ Cache removido"
 
-# 5. Sincronizar schema com banco (db push) - isso vai detectar o campo e atualizar o schema
-echo -e "\n5️⃣ Sincronizando schema do Prisma com o banco (db push)..."
+# 4. Sincronizar schema com banco (db push) - isso vai detectar o campo e atualizar o schema
+echo -e "\n4️⃣ Sincronizando schema do Prisma com o banco (db push)..."
 docker-compose exec backend npx prisma db push --accept-data-loss --skip-generate
 
 if [ $? -ne 0 ]; then
     echo "   ⚠️  Erro ao executar db push (continuando mesmo assim)"
 fi
 
-# 6. Regenerar Prisma Client (sem --force, pois não existe essa opção)
-echo -e "\n6️⃣ Regenerando Prisma Client..."
+# 5. Regenerar Prisma Client (sem --force, pois não existe essa opção)
+echo -e "\n5️⃣ Regenerando Prisma Client..."
 docker-compose exec backend npx prisma generate
 
 if [ $? -ne 0 ]; then
     echo "   ❌ Erro ao regenerar Prisma Client"
-    docker-compose start backend
     exit 1
 fi
 
 echo "   ✅ Prisma Client regenerado!"
 
-# 7. Verificar se o Prisma Client reconhece o campo
-echo -e "\n7️⃣ Verificando se o Prisma Client reconhece o campo keywords..."
+# 6. Verificar se o Prisma Client reconhece o campo
+echo -e "\n6️⃣ Verificando se o Prisma Client reconhece o campo keywords..."
 docker-compose exec -T backend node -e "
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
@@ -129,21 +124,20 @@ if [ $? -ne 0 ]; then
     
     if [ $? -ne 0 ]; then
         echo "   ❌ Ainda não funciona após tentativa alternativa"
-        docker-compose start backend
         exit 1
     fi
 fi
 
-# 8. Reiniciar backend
-echo -e "\n8️⃣ Reiniciando backend..."
-docker-compose start backend
+# 7. Reiniciar backend para carregar novo Prisma Client
+echo -e "\n7️⃣ Reiniciando backend para carregar novo Prisma Client..."
+docker-compose restart backend
 
-# 9. Aguardar inicialização
-echo -e "\n9️⃣ Aguardando backend inicializar (20 segundos)..."
+# 8. Aguardar inicialização
+echo -e "\n8️⃣ Aguardando backend inicializar (20 segundos)..."
 sleep 20
 
-# 10. Teste final de salvamento
-echo -e "\n🔟 Teste final - Salvando keywords em um produto..."
+# 9. Teste final de salvamento
+echo -e "\n9️⃣ Teste final - Salvando keywords em um produto..."
 docker-compose exec -T backend node -e "
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
