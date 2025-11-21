@@ -228,6 +228,18 @@ export default function App() {
               />
             )}
           </Route>
+          <Route path="/announcements">
+            {() => (
+              <ProtectedRoute
+                path="/announcements"
+                component={() => (
+                  <AdminLayout>
+                    <AdminAnnouncementsPage />
+                  </AdminLayout>
+                )}
+              />
+            )}
+          </Route>
           <Route path="/tickets">
             {() => (
               <ProtectedRoute
