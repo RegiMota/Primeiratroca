@@ -41,6 +41,7 @@ interface Product {
   stock: number;
   sizes: string[];
   colors: string[];
+  gender?: string | null; // 'menino', 'menina', 'outros' ou null
   featured: boolean;
 }
 
@@ -70,6 +71,7 @@ export function AdminProductsPage() {
     stock: '',
     sizes: [] as string[],
     colors: [] as string[],
+    gender: '' as string | '',
     featured: false,
   });
   const [newSize, setNewSize] = useState('');
@@ -119,6 +121,7 @@ export function AdminProductsPage() {
       stock: product.stock.toString(),
       sizes: Array.isArray(product.sizes) ? product.sizes : [],
       colors: Array.isArray(product.colors) ? product.colors : [],
+      gender: product.gender || '',
       featured: product.featured,
     });
     setIsDialogOpen(true);
@@ -150,6 +153,7 @@ export function AdminProductsPage() {
         stock: parseInt(formData.stock),
         sizes: formData.sizes,
         colors: formData.colors,
+        gender: formData.gender || undefined, // Opcional: 'menino', 'menina', 'outros' ou undefined
       };
 
       let productId: number;
@@ -186,6 +190,7 @@ export function AdminProductsPage() {
       stock: '',
       sizes: [],
       colors: [],
+      gender: '',
       featured: false,
     });
     setEditingProduct(null);
@@ -438,6 +443,28 @@ export function AdminProductsPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Gênero */}
+              <div>
+                <Label htmlFor="gender">Gênero (Opcional)</Label>
+                <Select
+                  value={formData.gender}
+                  onValueChange={(value) => setFormData({ ...formData, gender: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o gênero (opcional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="menino">Menino</SelectItem>
+                    <SelectItem value="menina">Menina</SelectItem>
+                    <SelectItem value="outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Especifique se o produto é para menino, menina ou outros
+                </p>
               </div>
 
               <div className="flex items-center gap-2">

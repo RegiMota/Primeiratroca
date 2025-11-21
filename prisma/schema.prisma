@@ -64,6 +64,7 @@ model Product {
   category          Category @relation(fields: [categoryId], references: [id])
   sizes             String   @db.Text // JSON array as string
   colors            String   @db.Text // JSON array as string
+  gender            String?  @db.VarChar(20) // NOVO - Gênero: 'menino', 'menina', 'outros' (opcional)
   featured          Boolean  @default(false)
   stock             Int      @default(0)
   createdAt         DateTime @default(now())

@@ -392,7 +392,7 @@ router.get('/products', async (req: AdminRequest, res) => {
 // Create product
 router.post('/products', async (req: AdminRequest, res) => {
   try {
-    const { name, description, detailedDescription, price, originalPrice, image, categoryId, sizes, colors, featured, stock } = req.body;
+    const { name, description, detailedDescription, price, originalPrice, image, categoryId, sizes, colors, gender, featured, stock } = req.body;
 
     if (!name || !description || !price || !image || !categoryId) {
       return res.status(400).json({ error: 'Campos obrigatórios faltando' });
@@ -409,6 +409,7 @@ router.post('/products', async (req: AdminRequest, res) => {
         categoryId: parseInt(categoryId),
         sizes: JSON.stringify(sizes || []),
         colors: JSON.stringify(colors || []),
+        gender: gender || null, // Opcional: 'menino', 'menina', 'outros' ou null
         featured: featured || false,
         stock: parseInt(stock) || 0,
       },
@@ -485,7 +486,7 @@ router.post('/products', async (req: AdminRequest, res) => {
 router.put('/products/:id', async (req: AdminRequest, res) => {
   try {
     const productId = parseInt(req.params.id);
-    const { name, description, detailedDescription, price, originalPrice, image, categoryId, sizes, colors, featured, stock } = req.body;
+    const { name, description, detailedDescription, price, originalPrice, image, categoryId, sizes, colors, gender, featured, stock } = req.body;
 
     // Get old product to check stock level
     const oldProduct = await prisma.product.findUnique({
@@ -505,6 +506,7 @@ router.put('/products/:id', async (req: AdminRequest, res) => {
         categoryId: categoryId ? parseInt(categoryId) : undefined,
         sizes: sizes ? JSON.stringify(sizes) : undefined,
         colors: colors ? JSON.stringify(colors) : undefined,
+        gender: gender !== undefined ? (gender || null) : undefined, // Opcional: 'menino', 'menina', 'outros' ou null
         featured,
         stock: stock !== undefined ? parseInt(stock) : undefined,
       },
