@@ -105,7 +105,7 @@ router.get('/', async (req, res) => {
       if (searchTerm.length > 0) {
         // Combinar busca com outros filtros usando AND
         // Usar mode: 'insensitive' para busca case-insensitive (funciona com PostgreSQL)
-        // Incluir palavras-chave na busca (oculto)
+        // Incluir palavras-chave na busca (oculto) - se houver erro, será tratado no catch
         where.AND = [
           ...(where.AND || []),
           {
@@ -533,13 +533,14 @@ router.get('/search/suggestions', async (req, res) => {
     const searchTerm = (q as string).trim();
     
     // Buscar produtos por nome (case-insensitive usando mode: 'insensitive')
+    // Se houver erro com keywords, será tratado no catch
     const products = await prisma.product.findMany({
       where: {
-            OR: [
-              { name: { contains: searchTerm, mode: 'insensitive' } },
-              { description: { contains: searchTerm, mode: 'insensitive' } },
-              { keywords: { contains: searchTerm, mode: 'insensitive' } }, // NOVO - Buscar em palavras-chave
-            ],
+        OR: [
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { description: { contains: searchTerm, mode: 'insensitive' } },
+          { keywords: { contains: searchTerm, mode: 'insensitive' } }, // NOVO - Buscar em palavras-chave
+        ],
       },
       select: {
         id: true,
