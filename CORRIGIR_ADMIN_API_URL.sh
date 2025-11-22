@@ -63,11 +63,13 @@ echo -e "${YELLOW}📝 Atualizando VITE_API_URL...${NC}"
 # Remover linhas antigas com seudominio ou api.primeiratrocaecia
 sed -i '/^VITE_API_URL=/d' .env.prod
 
-# Adicionar a linha correta
-# Em produção, usar caminho relativo /api (Nginx faz proxy)
-echo "VITE_API_URL=/api" >> .env.prod
+# IMPORTANTE: Deixar VITE_API_URL vazio ou usar caminho relativo
+# Se deixar vazio, o código do admin usa detecção automática (/api em HTTPS)
+# Se usar /api, será usado diretamente
+# Vamos deixar vazio para usar a detecção automática que já funciona
+# echo "VITE_API_URL=/api" >> .env.prod
 
-echo -e "${GREEN}✅ VITE_API_URL atualizado para /api${NC}"
+echo -e "${GREEN}✅ VITE_API_URL removido (usará detecção automática: /api)${NC}"
 echo ""
 
 # Mostrar a configuração atual

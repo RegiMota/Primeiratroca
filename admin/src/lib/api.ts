@@ -56,14 +56,21 @@ interface StockVariantData {
 
 // Detectar automaticamente a URL da API
 const getAPIUrl = () => {
-  // Se houver variável de ambiente, usar ela diretamente
+  // Se houver variável de ambiente, validar antes de usar
   if (import.meta.env.VITE_API_URL) {
-    let apiUrl = import.meta.env.VITE_API_URL;
-    // Garantir que termine com /api
-    if (!apiUrl.endsWith('/api')) {
-      apiUrl = apiUrl.replace(/\/$/, '') + '/api';
+    let apiUrl = import.meta.env.VITE_API_URL.trim();
+    
+    // Ignorar valores placeholder ou inválidos
+    if (apiUrl.includes('seudominio') || apiUrl.includes('example.com') || apiUrl === '') {
+      // Usar detecção automática se for placeholder
+      console.warn('VITE_API_URL contém placeholder, usando detecção automática');
+    } else {
+      // Garantir que termine com /api
+      if (!apiUrl.endsWith('/api')) {
+        apiUrl = apiUrl.replace(/\/$/, '') + '/api';
+      }
+      return apiUrl;
     }
-    return apiUrl;
   }
   
   // Se estiver em HTTPS (produção), usar caminho relativo /api (mesmo domínio via Nginx)
