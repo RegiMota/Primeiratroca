@@ -554,35 +554,102 @@ router.get('/search/suggestions', async (req, res) => {
 
     const searchTerm = (q as string).trim();
     
-    // Buscar produtos por nome (case-insensitive usando mode: 'insensitive')
+    // Buscar produtos por nome, descrição, palavras-chave, categoria, tamanho e cor
     // Se houver erro com keywords, será tratado no catch
-    const products = await prisma.product.findMany({
-      where: {
-        OR: [
-          { name: { contains: searchTerm, mode: 'insensitive' } },
-          { description: { contains: searchTerm, mode: 'insensitive' } },
-          // TODO: Reativar após aplicar migração do Prisma
-          // { keywords: { contains: searchTerm, mode: 'insensitive' } }, // NOVO - Buscar em palavras-chave
-        ],
-      },
-      select: {
-        id: true,
-        name: true,
-        categories: {
-          include: {
-            category: {
-              select: {
-                name: true,
+    let products;
+    try {
+      products = await prisma.product.findMany({
+        where: {
+          OR: [
+            { name: { contains: searchTerm, mode: 'insensitive' } },
+            { description: { contains: searchTerm, mode: 'insensitive' } },
+            { keywords: { contains: searchTerm, mode: 'insensitive' } }, // Buscar em palavras-chave
+            { sizes: { contains: searchTerm, mode: 'insensitive' } }, // Buscar em tamanhos
+            { colors: { contains: searchTerm, mode: 'insensitive' } }, // Buscar em cores
+            {
+              categories: {
+                some: {
+                  category: {
+                    OR: [
+                      { name: { contains: searchTerm, mode: 'insensitive' } },
+                      { slug: { contains: searchTerm, mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          categories: {
+            include: {
+              category: {
+                select: {
+                  name: true,
+                },
               },
             },
           },
         },
-      },
-      take: 10,
-      orderBy: {
-        name: 'asc',
-      },
-    });
+        take: 10,
+        orderBy: {
+          name: 'asc',
+        },
+      });
+    } catch (keywordsError: any) {
+      // Se houver erro com keywords, buscar sem ele
+      const isKeywordsError = 
+        keywordsError.code === 'P2009' || 
+        keywordsError.message?.includes('Unknown field') || 
+        keywordsError.message?.includes('keywords') ||
+        keywordsError.message?.includes('Unknown argument');
+      
+      if (isKeywordsError) {
+        products = await prisma.product.findMany({
+          where: {
+            OR: [
+              { name: { contains: searchTerm, mode: 'insensitive' } },
+              { description: { contains: searchTerm, mode: 'insensitive' } },
+              { sizes: { contains: searchTerm, mode: 'insensitive' } },
+              { colors: { contains: searchTerm, mode: 'insensitive' } },
+              {
+                categories: {
+                  some: {
+                    category: {
+                      OR: [
+                        { name: { contains: searchTerm, mode: 'insensitive' } },
+                        { slug: { contains: searchTerm, mode: 'insensitive' } },
+                      ],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+          select: {
+            id: true,
+            name: true,
+            categories: {
+              include: {
+                category: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+          take: 10,
+          orderBy: {
+            name: 'asc',
+          },
+        });
+      } else {
+        throw keywordsError;
+      }
+    }
 
     // Formatar sugestões
     const suggestions = products.map((product) => {
