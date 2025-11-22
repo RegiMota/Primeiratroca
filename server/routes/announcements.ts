@@ -9,6 +9,7 @@ router.get('/', async (req, res) => {
   try {
     const now = new Date();
     
+    // Buscar todos os avisos ativos
     const announcements = await prisma.announcement.findMany({
       where: {
         isActive: true,
@@ -31,9 +32,18 @@ router.get('/', async (req, res) => {
       ],
     });
 
+    // Log para debug (apenas em desenvolvimento)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Announcements] Found ${announcements.length} active announcements`);
+      announcements.forEach((ann) => {
+        console.log(`  - ${ann.title} (Active: ${ann.isActive}, Start: ${ann.startDate}, End: ${ann.endDate})`);
+      });
+    }
+
     res.json(announcements);
   } catch (error: any) {
     console.error('Error fetching announcements:', error);
+    console.error('Error stack:', error.stack);
     res.json([]); // Retornar array vazio em caso de erro para não quebrar o frontend
   }
 });

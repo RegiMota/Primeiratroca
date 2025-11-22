@@ -50,26 +50,41 @@ export function AnnouncementBanner() {
   const loadAnnouncements = async () => {
     try {
       const data = await announcementsAPI.getAll();
+      console.log('[AnnouncementBanner] Received announcements:', data);
+      
       // Filtrar apenas avisos ativos e dentro do período válido
       const now = new Date();
       const activeAnnouncements = data.filter((announcement: Announcement) => {
-        if (!announcement.isActive) return false;
+        if (!announcement.isActive) {
+          console.log(`[AnnouncementBanner] Skipping ${announcement.title} - not active`);
+          return false;
+        }
         
         // Verificar data de início
         if (announcement.startDate) {
           const startDate = new Date(announcement.startDate);
-          if (startDate > now) return false;
+          if (startDate > now) {
+            console.log(`[AnnouncementBanner] Skipping ${announcement.title} - start date in future`);
+            return false;
+          }
         }
         
         // Verificar data de fim
         if (announcement.endDate) {
           const endDate = new Date(announcement.endDate);
-          if (endDate < now) return false;
+          // Adicionar 1 dia para incluir o dia inteiro
+          endDate.setHours(23, 59, 59, 999);
+          if (endDate < now) {
+            console.log(`[AnnouncementBanner] Skipping ${announcement.title} - end date passed`);
+            return false;
+          }
         }
         
+        console.log(`[AnnouncementBanner] Including ${announcement.title}`);
         return true;
       });
       
+      console.log(`[AnnouncementBanner] Active announcements: ${activeAnnouncements.length}`);
       setAnnouncements(activeAnnouncements);
     } catch (error) {
       console.error('Error loading announcements:', error);
