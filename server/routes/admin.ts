@@ -3622,6 +3622,10 @@ router.post('/announcements', async (req: AdminRequest, res) => {
       return res.status(400).json({ error: 'Título é obrigatório' });
     }
 
+    // Converter datas vazias para null
+    const startDateValue = startDate && startDate.trim() !== '' ? new Date(startDate) : null;
+    const endDateValue = endDate && endDate.trim() !== '' ? new Date(endDate) : null;
+    
     const announcement = await prisma.announcement.create({
       data: {
         title,
@@ -3631,10 +3635,12 @@ router.post('/announcements', async (req: AdminRequest, res) => {
         type: type || 'info',
         isActive: isActive !== undefined ? isActive : true,
         order: order || 0,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
+        startDate: startDateValue,
+        endDate: endDateValue,
       },
     });
+    
+    console.log(`[Admin] Announcement created: ID=${announcement.id}, Title=${announcement.title}, Active=${announcement.isActive}, StartDate=${announcement.startDate}, EndDate=${announcement.endDate}`);
 
     // Audit logging
     AuditService.log({
@@ -3662,6 +3668,14 @@ router.put('/announcements/:id', async (req: AdminRequest, res) => {
     const id = parseInt(req.params.id);
     const { title, description, imageUrl, link, type, isActive, order, startDate, endDate } = req.body;
 
+    // Converter datas vazias para null
+    const startDateValue = startDate !== undefined 
+      ? (startDate && startDate.trim() !== '' ? new Date(startDate) : null)
+      : undefined;
+    const endDateValue = endDate !== undefined 
+      ? (endDate && endDate.trim() !== '' ? new Date(endDate) : null)
+      : undefined;
+    
     const announcement = await prisma.announcement.update({
       where: { id },
       data: {
@@ -3672,10 +3686,12 @@ router.put('/announcements/:id', async (req: AdminRequest, res) => {
         type,
         isActive,
         order,
-        startDate: startDate !== undefined ? (startDate ? new Date(startDate) : null) : undefined,
-        endDate: endDate !== undefined ? (endDate ? new Date(endDate) : null) : undefined,
+        startDate: startDateValue,
+        endDate: endDateValue,
       },
     });
+    
+    console.log(`[Admin] Announcement updated: ID=${announcement.id}, Title=${announcement.title}, Active=${announcement.isActive}, StartDate=${announcement.startDate}, EndDate=${announcement.endDate}`);
 
     // Audit logging
     AuditService.log({
