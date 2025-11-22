@@ -1,89 +1,91 @@
 #!/bin/bash
 
-# Script para corrigir o limite de upload no Nginx
-# Resolve o erro 413 (Request Entity Too Large)
+echo "🔧 Corrigindo Limite de Upload no Nginx"
+echo "======================================="
 
-echo "🔧 Corrigindo limite de upload no Nginx..."
+# 1. Verificar configuração atual do Nginx
+echo -e "\n1️⃣ Verificando configuração atual do Nginx..."
+if [ -f "/etc/nginx/nginx.conf" ]; then
+    echo "   Verificando client_max_body_size..."
+    grep -i "client_max_body_size" /etc/nginx/nginx.conf || echo "   ⚠️  client_max_body_size não encontrado em nginx.conf"
+fi
 
-# Diretório de configuração do Nginx
-NGINX_CONF_DIR="/etc/nginx/sites-available"
-NGINX_ENABLED_DIR="/etc/nginx/sites-enabled"
-
-# Arquivos de configuração
-FRONTEND_CONF="$NGINX_CONF_DIR/primeira-troca-frontend.conf"
-ADMIN_CONF="$NGINX_CONF_DIR/primeira-troca-admin.conf"
-API_CONF="$NGINX_CONF_DIR/primeira-troca-api.conf"
-
-# Função para adicionar/atualizar client_max_body_size
-update_nginx_config() {
-    local config_file=$1
-    local server_name=$2
-    
-    if [ ! -f "$config_file" ]; then
-        echo "⚠️  Arquivo $config_file não encontrado. Pulando..."
-        return
+# 2. Verificar configurações de sites
+echo -e "\n2️⃣ Verificando configurações de sites..."
+for config_file in /etc/nginx/sites-available/*; do
+    if [ -f "$config_file" ]; then
+        echo "   Verificando: $config_file"
+        grep -i "client_max_body_size" "$config_file" || echo "     ⚠️  client_max_body_size não encontrado"
     fi
-    
-    echo "📝 Atualizando $config_file..."
-    
-    # Verificar se client_max_body_size já existe
-    if grep -q "client_max_body_size" "$config_file"; then
-        # Atualizar valor existente
-        sed -i 's/client_max_body_size.*/client_max_body_size 100M;/' "$config_file"
-        echo "✅ Atualizado client_max_body_size em $config_file"
+done
+
+# 3. Adicionar client_max_body_size nas configurações
+echo -e "\n3️⃣ Adicionando client_max_body_size nas configurações..."
+
+# Adicionar no nginx.conf se não existir
+if [ -f "/etc/nginx/nginx.conf" ]; then
+    if ! grep -q "client_max_body_size" /etc/nginx/nginx.conf; then
+        echo "   Adicionando client_max_body_size no nginx.conf..."
+        # Adicionar dentro do bloco http
+        sed -i '/^http {/a\    client_max_body_size 100M;' /etc/nginx/nginx.conf
+        echo "   ✅ Adicionado no nginx.conf"
     else
-        # Adicionar após o server_name ou no início do bloco server
-        if grep -q "server_name" "$config_file"; then
-            # Adicionar após server_name
-            sed -i "/server_name/a\    client_max_body_size 100M;" "$config_file"
-        else
-            # Adicionar no início do bloco server
-            sed -i "/^server {/a\    client_max_body_size 100M;" "$config_file"
-        fi
-        echo "✅ Adicionado client_max_body_size em $config_file"
-    fi
-}
-
-# Atualizar configurações
-update_nginx_config "$FRONTEND_CONF" "frontend"
-update_nginx_config "$ADMIN_CONF" "admin"
-update_nginx_config "$API_CONF" "api"
-
-# Também adicionar no nginx.conf principal se necessário
-NGINX_MAIN="/etc/nginx/nginx.conf"
-if [ -f "$NGINX_MAIN" ]; then
-    if ! grep -q "client_max_body_size" "$NGINX_MAIN"; then
-        # Adicionar no bloco http
-        sed -i "/^http {/a\    client_max_body_size 100M;" "$NGINX_MAIN"
-        echo "✅ Adicionado client_max_body_size no nginx.conf principal"
+        echo "   ⚠️  client_max_body_size já existe no nginx.conf, atualizando..."
+        sed -i 's/client_max_body_size.*/client_max_body_size 100M;/i' /etc/nginx/nginx.conf
+        echo "   ✅ Atualizado no nginx.conf"
     fi
 fi
 
-# Testar configuração do Nginx
-echo ""
-echo "🧪 Testando configuração do Nginx..."
-if nginx -t; then
-    echo "✅ Configuração do Nginx está válida!"
-    echo ""
-    echo "🔄 Reiniciando Nginx..."
-    systemctl reload nginx
-    if [ $? -eq 0 ]; then
-        echo "✅ Nginx reiniciado com sucesso!"
-    else
-        echo "❌ Erro ao reiniciar Nginx. Tentando restart..."
-        systemctl restart nginx
+# Adicionar nas configurações de sites
+for config_file in /etc/nginx/sites-available/*; do
+    if [ -f "$config_file" ]; then
+        if ! grep -q "client_max_body_size" "$config_file"; then
+            echo "   Adicionando client_max_body_size em $config_file..."
+            # Adicionar no início do bloco server
+            sed -i '/^[[:space:]]*server {/a\    client_max_body_size 100M;' "$config_file"
+            echo "   ✅ Adicionado em $config_file"
+        else
+            echo "   ⚠️  client_max_body_size já existe em $config_file, atualizando..."
+            sed -i 's/client_max_body_size.*/client_max_body_size 100M;/i' "$config_file"
+            echo "   ✅ Atualizado em $config_file"
+        fi
     fi
+done
+
+# 4. Verificar sintaxe do Nginx
+echo -e "\n4️⃣ Verificando sintaxe do Nginx..."
+if nginx -t 2>&1 | grep -q "successful"; then
+    echo "   ✅ Sintaxe do Nginx está correta"
 else
-    echo "❌ Erro na configuração do Nginx. Verifique os logs acima."
+    echo "   ❌ Erro na sintaxe do Nginx:"
+    nginx -t
     exit 1
 fi
 
-echo ""
-echo "✅ Limite de upload atualizado para 100MB!"
-echo "📋 Resumo:"
-echo "   - client_max_body_size: 100M"
-echo "   - Limite do multer: 100MB"
-echo "   - Limite do Express: 100MB"
-echo ""
-echo "💡 Agora você pode fazer upload de arquivos de até 100MB."
+# 5. Recarregar Nginx
+echo -e "\n5️⃣ Recarregando Nginx..."
+if systemctl reload nginx; then
+    echo "   ✅ Nginx recarregado com sucesso"
+else
+    echo "   ⚠️  Erro ao recarregar Nginx, tentando reiniciar..."
+    systemctl restart nginx
+    if [ $? -eq 0 ]; then
+        echo "   ✅ Nginx reiniciado com sucesso"
+    else
+        echo "   ❌ Erro ao reiniciar Nginx"
+        exit 1
+    fi
+fi
 
+# 6. Verificar configuração final
+echo -e "\n6️⃣ Verificando configuração final..."
+echo "   client_max_body_size encontrado em:"
+grep -r "client_max_body_size" /etc/nginx/ 2>/dev/null | grep -v ".dpkg" || echo "   ⚠️  Nenhum encontrado"
+
+echo -e "\n✅ Limite de upload corrigido!"
+echo ""
+echo "📝 O limite agora é de 100MB para uploads"
+echo "   Se ainda houver problemas, verifique:"
+echo "   1. Logs do Nginx: tail -f /var/log/nginx/error.log"
+echo "   2. Logs do backend: docker-compose logs backend | grep upload"
+echo ""
