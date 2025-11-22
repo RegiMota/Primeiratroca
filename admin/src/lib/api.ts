@@ -725,6 +725,17 @@ export const themeAPI = {
 };
 
 // Announcements API
+export const monitoringAPI = {
+  getHealth: async () => {
+    const response = await api.get('/admin/monitoring/health');
+    return response.data;
+  },
+  getLogs: async () => {
+    const response = await api.get('/admin/monitoring/logs');
+    return response.data;
+  },
+};
+
 export const announcementsAPI = {
   getAll: async () => {
     const response = await api.get('/admin/announcements');

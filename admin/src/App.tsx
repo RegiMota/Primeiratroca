@@ -22,6 +22,7 @@ import { AdminShippingPage } from './pages/AdminShippingPage';
 import { AdminTicketsPage } from './pages/AdminTicketsPage';
 import { AdminContentPage } from './pages/AdminContentPage';
 import { AdminAnnouncementsPage } from './pages/AdminAnnouncementsPage';
+import { AdminMonitoringPage } from './pages/AdminMonitoringPage';
 import { useAuth } from './contexts/AuthContext';
 import { useEffect } from 'react';
 
@@ -235,6 +236,18 @@ export default function App() {
                 component={() => (
                   <AdminLayout>
                     <AdminAnnouncementsPage />
+                  </AdminLayout>
+                )}
+              />
+            )}
+          </Route>
+          <Route path="/monitoring">
+            {() => (
+              <ProtectedRoute
+                path="/monitoring"
+                component={() => (
+                  <AdminLayout>
+                    <AdminMonitoringPage />
                   </AdminLayout>
                 )}
               />

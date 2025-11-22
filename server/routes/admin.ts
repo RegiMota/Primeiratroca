@@ -3751,5 +3751,204 @@ router.delete('/announcements/:id', async (req: AdminRequest, res) => {
   }
 });
 
+// Monitoring routes
+// GET /api/admin/monitoring/health - Get system health status
+router.get('/monitoring/health', async (req: AdminRequest, res) => {
+  try {
+    const startTime = Date.now();
+    
+    // Check database health
+    let databaseStatus: 'healthy' | 'unhealthy' | 'unknown' = 'unknown';
+    let databaseResponseTime: number | undefined;
+    let databaseError: string | undefined;
+    
+    try {
+      const dbStartTime = Date.now();
+      await prisma.$queryRaw`SELECT 1`;
+      databaseResponseTime = Date.now() - dbStartTime;
+      databaseStatus = 'healthy';
+    } catch (error: any) {
+      databaseStatus = 'unhealthy';
+      databaseError = error.message || 'Erro ao conectar com o banco de dados';
+    }
+
+    // Check backend health
+    let backendStatus: 'healthy' | 'unhealthy' | 'unknown' = 'healthy';
+    let backendResponseTime: number | undefined;
+    let backendError: string | undefined;
+    let backendUptime: number | undefined;
+
+    try {
+      backendResponseTime = Date.now() - startTime;
+      // Get process uptime (in seconds)
+      backendUptime = process.uptime();
+    } catch (error: any) {
+      backendStatus = 'unhealthy';
+      backendError = error.message || 'Erro ao verificar status do backend';
+    }
+
+    // Check frontend health (basic check - frontend is served by Nginx)
+    let frontendStatus: 'healthy' | 'unhealthy' | 'unknown' = 'unknown';
+    let frontendError: string | undefined;
+
+    // Frontend is typically served by Nginx, so we assume it's healthy if backend is healthy
+    // In a real scenario, you might want to make an HTTP request to the frontend
+    frontendStatus = backendStatus === 'healthy' ? 'healthy' : 'unknown';
+
+    // Check admin panel health (similar to frontend)
+    let adminStatus: 'healthy' | 'unhealthy' | 'unknown' = 'unknown';
+    let adminError: string | undefined;
+
+    adminStatus = backendStatus === 'healthy' ? 'healthy' : 'unknown';
+
+    res.json({
+      database: {
+        status: databaseStatus,
+        responseTime: databaseResponseTime,
+        error: databaseError,
+      },
+      backend: {
+        status: backendStatus,
+        responseTime: backendResponseTime,
+        uptime: backendUptime,
+        error: backendError,
+      },
+      frontend: {
+        status: frontendStatus,
+        error: frontendError,
+      },
+      admin: {
+        status: adminStatus,
+        error: adminError,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error getting system health:', error);
+    res.status(500).json({ error: 'Erro ao verificar saúde do sistema' });
+  }
+});
+
+// GET /api/admin/monitoring/logs - Get error logs from all services
+router.get('/monitoring/logs', async (req: AdminRequest, res) => {
+  try {
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const path = require('path');
+    const execAsync = promisify(exec);
+
+    // Try to find the project root by looking for docker-compose.yml
+    // Start from the current working directory and go up
+    const findProjectRoot = () => {
+      const fs = require('fs');
+      let currentDir = __dirname;
+      for (let i = 0; i < 5; i++) {
+        const dockerComposePath = path.join(currentDir, 'docker-compose.yml');
+        if (fs.existsSync(dockerComposePath)) {
+          return currentDir;
+        }
+        currentDir = path.dirname(currentDir);
+      }
+      // Fallback to common locations
+      return process.env.PROJECT_ROOT || '/root/Primeiratroca' || process.cwd();
+    };
+
+    const projectRoot = findProjectRoot();
+
+    const logs: Record<string, { service: string; logs: string[]; error: string | null }> = {};
+
+    // Helper function to get logs
+    const getServiceLogs = async (serviceName: string, grepPattern: string = 'error|fatal|exception') => {
+      try {
+        const { stdout } = await execAsync(
+          `cd "${projectRoot}" && docker-compose logs --tail=100 ${serviceName} 2>&1 | grep -iE "${grepPattern}" || echo ""`,
+          { timeout: 10000, maxBuffer: 1024 * 1024 } // 10s timeout, 1MB buffer
+        );
+        return stdout
+          .split('\n')
+          .filter((line: string) => line.trim().length > 0)
+          .slice(0, 50);
+      } catch (error: any) {
+        // If grep finds nothing, it returns exit code 1, which is fine
+        if (error.code === 1 && error.stdout) {
+          return error.stdout
+            .split('\n')
+            .filter((line: string) => line.trim().length > 0)
+            .slice(0, 50);
+        }
+        throw error;
+      }
+    };
+
+    // Get database logs (service name is 'postgres' in docker-compose.yml)
+    try {
+      const dbLogs = await getServiceLogs('postgres', 'error|fatal|exception|failed|timeout');
+      logs.database = {
+        service: 'database',
+        logs: dbLogs,
+        error: null,
+      };
+    } catch (error: any) {
+      logs.database = {
+        service: 'database',
+        logs: [],
+        error: error.message || 'Erro ao obter logs do banco de dados',
+      };
+    }
+
+    // Get backend logs
+    try {
+      const backendLogs = await getServiceLogs('backend', 'error|fatal|exception|500|400|failed|timeout|unhandled');
+      logs.backend = {
+        service: 'backend',
+        logs: backendLogs,
+        error: null,
+      };
+    } catch (error: any) {
+      logs.backend = {
+        service: 'backend',
+        logs: [],
+        error: error.message || 'Erro ao obter logs do backend',
+      };
+    }
+
+    // Get frontend logs
+    try {
+      const frontendLogs = await getServiceLogs('frontend', 'error|fatal|exception|failed|timeout');
+      logs.frontend = {
+        service: 'frontend',
+        logs: frontendLogs,
+        error: null,
+      };
+    } catch (error: any) {
+      logs.frontend = {
+        service: 'frontend',
+        logs: [],
+        error: error.message || 'Erro ao obter logs do frontend',
+      };
+    }
+
+    // Get admin logs
+    try {
+      const adminLogs = await getServiceLogs('admin', 'error|fatal|exception|failed|timeout');
+      logs.admin = {
+        service: 'admin',
+        logs: adminLogs,
+        error: null,
+      };
+    } catch (error: any) {
+      logs.admin = {
+        service: 'admin',
+        logs: [],
+        error: error.message || 'Erro ao obter logs do admin panel',
+      };
+    }
+
+    res.json(logs);
+  } catch (error: any) {
+    console.error('Error getting logs:', error);
+    res.status(500).json({ error: 'Erro ao obter logs do sistema: ' + (error.message || 'Erro desconhecido') });
+  }
+});
+
 export default router;
 

@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Image,
   Bell,
+  Activity,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { AdminSearchBar } from './AdminSearchBar';
@@ -62,6 +63,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     { icon: FileText, label: 'Relatórios', path: '/reports' },
     { icon: Image, label: 'Conteúdo', path: '/content' },
     { icon: Bell, label: 'Avisos', path: '/announcements' },
+    { icon: Activity, label: 'Monitoramento', path: '/monitoring' },
     { icon: Settings, label: 'Configurações', path: '/settings' },
   ];
 
