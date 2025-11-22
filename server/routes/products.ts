@@ -105,15 +105,28 @@ router.get('/', async (req, res) => {
       if (searchTerm.length > 0) {
         // Combinar busca com outros filtros usando AND
         // Usar mode: 'insensitive' para busca case-insensitive (funciona com PostgreSQL)
-        // Incluir palavras-chave na busca (oculto) - se houver erro, será tratado no catch
+        // Buscar em: nome, descrição, palavras-chave, categoria, tamanho e cor
         where.AND = [
           ...(where.AND || []),
           {
             OR: [
               { name: { contains: searchTerm, mode: 'insensitive' } },
               { description: { contains: searchTerm, mode: 'insensitive' } },
-              // TODO: Reativar após aplicar migração do Prisma
-              // { keywords: { contains: searchTerm, mode: 'insensitive' } }, // NOVO - Buscar em palavras-chave
+              { keywords: { contains: searchTerm, mode: 'insensitive' } }, // Buscar em palavras-chave
+              { sizes: { contains: searchTerm, mode: 'insensitive' } }, // Buscar em tamanhos
+              { colors: { contains: searchTerm, mode: 'insensitive' } }, // Buscar em cores
+              {
+                categories: {
+                  some: {
+                    category: {
+                      OR: [
+                        { name: { contains: searchTerm, mode: 'insensitive' } },
+                        { slug: { contains: searchTerm, mode: 'insensitive' } },
+                      ],
+                    },
+                  },
+                },
+              },
             ],
           },
         ];
@@ -603,6 +616,20 @@ router.get('/search/suggestions', async (req, res) => {
             OR: [
               { name: { contains: searchTerm, mode: 'insensitive' } },
               { description: { contains: searchTerm, mode: 'insensitive' } },
+              { sizes: { contains: searchTerm, mode: 'insensitive' } },
+              { colors: { contains: searchTerm, mode: 'insensitive' } },
+              {
+                categories: {
+                  some: {
+                    category: {
+                      OR: [
+                        { name: { contains: searchTerm, mode: 'insensitive' } },
+                        { slug: { contains: searchTerm, mode: 'insensitive' } },
+                      ],
+                    },
+                  },
+                },
+              },
             ],
           },
           select: {
